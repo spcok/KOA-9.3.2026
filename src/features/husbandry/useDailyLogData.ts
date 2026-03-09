@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { LogEntry, LogType } from '../../types';
 import { db } from '../../lib/db';
 import { useAnimalsData } from '../animals/useAnimalsData';
 
 export const useDailyLogData = (viewDate: string, activeCategory: string) => {
-  const { animals } = useAnimalsData();
+  const { animals, isLoading: animalsLoading } = useAnimalsData();
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [logsLoading, setLogsLoading] = useState(true);
 
   const fetchLogs = useCallback(async () => {
     const allLogs = await db.daily_logs.toArray();
@@ -15,21 +16,29 @@ export const useDailyLogData = (viewDate: string, activeCategory: string) => {
   useEffect(() => {
     let isMounted = true;
     fetchLogs().then(logs => {
-      if (isMounted) setLogs(logs);
+      if (isMounted) {
+        setLogs(logs);
+        setLogsLoading(false);
+      }
     });
-    return () => { isMounted = false; };
+    return () => { 
+      isMounted = false; 
+      setLogsLoading(true);
+    };
   }, [fetchLogs]);
 
-  const getTodayLog = (animalId: string, type: LogType) => {
+  const getTodayLog = useCallback((animalId: string, type: LogType) => {
     return logs.find(log => log.animal_id === animalId && log.log_type === type);
-  };
+  }, [logs]);
 
-  const addLogEntry = async (entry: Partial<LogEntry>) => {
+  const addLogEntry = useCallback(async (entry: Partial<LogEntry>) => {
     await db.daily_logs.add(entry as LogEntry);
     await fetchLogs().then(logs => setLogs(logs));
-  };
+  }, [fetchLogs]);
 
-  const filteredAnimals = animals.filter(a => activeCategory === 'all' || a.category === activeCategory);
+  const filteredAnimals = useMemo(() => {
+    return animals.filter(a => activeCategory === 'all' || a.category === activeCategory);
+  }, [animals, activeCategory]);
 
-  return { animals: filteredAnimals, getTodayLog, addLogEntry };
+  return { animals: filteredAnimals, getTodayLog, addLogEntry, isLoading: animalsLoading || logsLoading };
 };

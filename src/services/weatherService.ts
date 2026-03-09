@@ -11,6 +11,7 @@ export interface WeatherDaily {
   date: string;
   weatherCode: number;
   maxTemp: number;
+  minTemp: number;
 }
 
 export interface WeatherHourly {
@@ -56,7 +57,7 @@ export const getFullWeather = async (address: string = 'Maidstone, Kent, UK'): P
     console.error('Geocoding failed, using fallback', e);
   }
 
-  const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m&hourly=temperature_2m,precipitation_probability,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m&daily=weather_code,temperature_2m_max&timezone=auto`);
+  const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m&hourly=temperature_2m,precipitation_probability,weather_code,wind_speed_10m,wind_direction_10m,wind_gusts_10m&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto`);
   const data = await weatherRes.json();
 
   const current: WeatherCurrent = {
@@ -72,6 +73,7 @@ export const getFullWeather = async (address: string = 'Maidstone, Kent, UK'): P
     date: time,
     weatherCode: data.daily.weather_code[i],
     maxTemp: data.daily.temperature_2m_max[i],
+    minTemp: data.daily.temperature_2m_min[i],
   }));
 
   const hourly: WeatherHourly[] = data.hourly.time.map((time: string, i: number) => ({
@@ -88,24 +90,23 @@ export const getFullWeather = async (address: string = 'Maidstone, Kent, UK'): P
   return { current, daily, hourly };
 };
 
-export const getMaidstone1300Weather = async (): Promise<{ temperature: number; description: string }> => {
-  const weatherData = await getFullWeather('Maidstone, Kent, England');
+export const getMaidstoneDailyWeather = async () => {
+  const data = await getFullWeather('Maidstone, Kent, UK'); 
+  // Extract 13:00 specific hour
+  const todayPrefix = new Date().toISOString().split('T')[0];
+  const targetTime = `${todayPrefix}T13:00`;
+  const hourly1300 = data.hourly?.find((h: WeatherHourly) => h.time === targetTime) || data.hourly?.[13];
   
-  // Find hourly forecast closest to 13:00
-  const today = new Date().toISOString().split('T')[0];
-  const targetTime = `${today}T13:00`;
-  
-  const hourly = weatherData.hourly;
-  const forecast1300 = hourly.find(h => h.time === targetTime);
-  
-  if (!forecast1300) {
-    throw new Error('Could not find weather forecast for 13:00');
-  }
-  
-  console.log('Extracted 13:00 temperature for Maidstone:', forecast1300.temp);
+  // Extract daily max/min
+  const maxTemp = data.daily?.[0]?.maxTemp ?? Math.round(data.current.temperature + 2);
+  const minTemp = data.daily?.[0]?.minTemp ?? Math.round(data.current.temperature - 3);
   
   return {
-    temperature: forecast1300.temp,
-    description: forecast1300.description
+    currentTemp: hourly1300?.temp ?? data.current.temperature,
+    maxTemp,
+    minTemp,
+    rangeString: `Max: ${maxTemp}°C / Min: ${minTemp}°C`,
+    description: hourly1300?.description ?? data.current.description
   };
 };
+

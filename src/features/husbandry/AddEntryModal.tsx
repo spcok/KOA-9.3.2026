@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import { X, Save, Loader2 } from 'lucide-react';
 import { Animal, LogType, LogEntry, AnimalCategory } from '../../types';
-import { getMaidstone1300Weather } from '../../services/weatherService';
+import { getMaidstoneDailyWeather } from '../../services/weatherService';
 
 interface AddEntryModalProps {
   isOpen: boolean;
@@ -47,8 +48,8 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
       const fetchWeather = async () => {
         setIsWeatherLoading(true);
         try {
-          const weather = await getMaidstone1300Weather();
-          setTemperature(Math.round(weather.temperature));
+          const weather = await getMaidstoneDailyWeather();
+          setTemperature(Math.round(weather.currentTemp));
           setNotes(prev => prev ? `${prev} | ${weather.description}` : weather.description);
         } catch (error) {
           console.error('Failed to auto-fetch weather', error);
@@ -66,7 +67,7 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
     e.preventDefault();
     
     const entry: Partial<LogEntry> = {
-      id: existingLog?.id,
+      id: existingLog?.id || uuidv4(),
       animal_id: animal.id,
       log_type: logType,
       log_date: date,
@@ -84,7 +85,8 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
         if (baskingTemp !== '' && coolTemp !== '') {
           entry.basking_temp_c = Number(baskingTemp);
           entry.cool_temp_c = Number(coolTemp);
-          entry.value = `Basking: ${baskingTemp}°C / Cool: ${coolTemp}°C`;
+          entry.value = `${baskingTemp}°C / ${coolTemp}°C`;
+          entry.notes = JSON.stringify({ basking: Number(baskingTemp), cool: Number(coolTemp) });
         }
       } else {
         if (temperature !== '') entry.temperature_c = Number(temperature);
