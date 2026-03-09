@@ -87,3 +87,25 @@ export const getFullWeather = async (address: string = 'Maidstone, Kent, UK'): P
 
   return { current, daily, hourly };
 };
+
+export const getMaidstone1300Weather = async (): Promise<{ temperature: number; description: string }> => {
+  const weatherData = await getFullWeather('Maidstone, Kent, England');
+  
+  // Find hourly forecast closest to 13:00
+  const today = new Date().toISOString().split('T')[0];
+  const targetTime = `${today}T13:00`;
+  
+  const hourly = weatherData.hourly;
+  const forecast1300 = hourly.find(h => h.time === targetTime);
+  
+  if (!forecast1300) {
+    throw new Error('Could not find weather forecast for 13:00');
+  }
+  
+  console.log('Extracted 13:00 temperature for Maidstone:', forecast1300.temp);
+  
+  return {
+    temperature: forecast1300.temp,
+    description: forecast1300.description
+  };
+};

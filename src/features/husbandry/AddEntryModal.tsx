@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save, Loader2 } from 'lucide-react';
 import { Animal, LogType, LogEntry, AnimalCategory } from '../../types';
-import { getFullWeather } from '../../services/weatherService';
+import { getMaidstone1300Weather } from '../../services/weatherService';
 
 interface AddEntryModalProps {
   isOpen: boolean;
@@ -43,15 +43,13 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
   const [isWeatherLoading, setIsWeatherLoading] = useState(false);
 
   useEffect(() => {
-    if (logType === LogType.TEMPERATURE && temperature === '' && !existingLog) {
+    if (logType === LogType.TEMPERATURE && temperature === '' && !existingLog && animal.category !== AnimalCategory.EXOTICS) {
       const fetchWeather = async () => {
         setIsWeatherLoading(true);
         try {
-          const weather = await getFullWeather();
-          if (weather && weather.current) {
-            setTemperature(Math.round(weather.current.temperature));
-            setNotes(prev => prev ? `${prev} | ${weather.current.description}` : weather.current.description);
-          }
+          const weather = await getMaidstone1300Weather();
+          setTemperature(Math.round(weather.temperature));
+          setNotes(prev => prev ? `${prev} | ${weather.description}` : weather.description);
         } catch (error) {
           console.error('Failed to auto-fetch weather', error);
         } finally {
@@ -60,7 +58,7 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
       };
       fetchWeather();
     }
-  }, [logType, temperature, existingLog]);
+  }, [logType, temperature, existingLog, animal.category]);
 
   if (!isOpen) return null;
 
@@ -83,9 +81,11 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
 
     if (logType === LogType.TEMPERATURE) {
       if (animal.category === AnimalCategory.EXOTICS) {
-        if (baskingTemp !== '') entry.basking_temp_c = Number(baskingTemp);
-        if (coolTemp !== '') entry.cool_temp_c = Number(coolTemp);
-        entry.value = `Basking: ${baskingTemp}°C, Cool: ${coolTemp}°C`;
+        if (baskingTemp !== '' && coolTemp !== '') {
+          entry.basking_temp_c = Number(baskingTemp);
+          entry.cool_temp_c = Number(coolTemp);
+          entry.value = `Basking: ${baskingTemp}°C / Cool: ${coolTemp}°C`;
+        }
       } else {
         if (temperature !== '') entry.temperature_c = Number(temperature);
         entry.value = `${temperature}°C`;
