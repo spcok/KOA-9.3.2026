@@ -18,6 +18,7 @@ import { db } from '../../lib/db';
 import { useHybridQuery } from '../../lib/dataEngine';
 import { Animal } from '../../types';
 import { generateDailyLogDocx } from './utils/docxExportService';
+import { useAuthStore } from '../../store/authStore';
 
 interface ReportDefinition {
   id: string;
@@ -103,11 +104,13 @@ export default function ReportsDashboard() {
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('landscape');
   
   const animals = useHybridQuery<Animal[]>('animals', () => db.animals.toArray(), []);
+  const { currentUser } = useAuthStore();
 
   // Preview State
   const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
   const previewContainerRef = useRef<HTMLDivElement>(null);
 
   const activeReport = REPORTS.find(r => r.id === activeReportId) || REPORTS[0];
@@ -132,7 +135,20 @@ export default function ReportsDashboard() {
           .between(startDate, endDate, true, true)
           .toArray();
 
-        const blob = await generateDailyLogDocx(animals || [], logs, dates, selectedCategory);
+        const blob = await generateDailyLogDocx(
+          animals || [], 
+          logs, 
+          startDate, 
+          endDate, 
+          selectedCategory, 
+          orientation,
+          {
+            reportName: activeReport.title,
+            startDate,
+            endDate,
+            generatedBy: currentUser?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'STAFF'
+          }
+        );
         setPreviewBlob(blob);
         
         if (previewContainerRef.current) {
@@ -278,6 +294,11 @@ export default function ReportsDashboard() {
               <Download className="w-4 h-4" />
               Download Report (.docx)
             </button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setZoom(z => Math.max(0.5, z - 0.1))} className="p-2 bg-slate-200 rounded hover:bg-slate-300">-</button>
+              <span className="text-sm font-medium">{Math.round(zoom * 100)}%</span>
+              <button onClick={() => setZoom(z => Math.min(2, z + 0.1))} className="p-2 bg-slate-200 rounded hover:bg-slate-300">+</button>
+            </div>
           </div>
         </div>
 
@@ -286,7 +307,9 @@ export default function ReportsDashboard() {
           <div className="flex-grow flex flex-col overflow-hidden bg-slate-100/50 rounded-xl border border-slate-200">
             {error && <div className="p-4 mb-4 text-red-700 bg-red-100 rounded-lg">{error}</div>}
             {/* DOCX Preview Container */}
-            <div ref={previewContainerRef} className="bg-white min-h-[600px] shadow-inner" />
+            <div style={{ zoom: zoom }} className="bg-white min-h-[600px] shadow-inner">
+              <div ref={previewContainerRef} />
+            </div>
           </div>
         </div>
       </div>

@@ -30,7 +30,13 @@ export default function App() {
   const { initialize, isLoading, session } = useAuthStore();
 
   useEffect(() => {
-    initialize();
+    let cleanup: () => void;
+    initialize().then(c => {
+      if (typeof c === 'function') cleanup = c;
+    });
+    return () => {
+      if (cleanup) cleanup();
+    };
   }, [initialize]);
 
   useEffect(() => {

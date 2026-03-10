@@ -1,10 +1,14 @@
+/* 
+  SQL: CREATE POLICY "Public Access" ON storage.objects FOR SELECT USING (bucket_id = 'koa-attachments');
+  NOTE: Ensure a public bucket named 'koa-attachments' exists in your Supabase dashboard.
+*/
 import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useOrgSettings } from '../useOrgSettings';
 import { OrgProfileSettings } from '../../../types';
-import { uploadFile } from '../../../lib/storageEngine';
+import { supabase } from '../../../lib/supabase';
 
 const schema = z.object({
   id: z.string(),
@@ -39,9 +43,20 @@ const OrgProfile: React.FC = () => {
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setIsUploading(true);
+      const file = e.target.files[0];
       try {
-        const url = await uploadFile(e.target.files[0], 'logos');
-        setValue('logo_url', url, { shouldValidate: true, shouldDirty: true });
+        const filePath = `logos/${Date.now()}-${file.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from('koa-attachments')
+          .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('koa-attachments')
+          .getPublicUrl(filePath);
+
+        setValue('logo_url', publicUrl, { shouldValidate: true, shouldDirty: true });
       } catch (error) {
         console.error('Upload failed', error);
         alert('Upload failed');

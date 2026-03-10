@@ -12,7 +12,7 @@ interface AuthState {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ error: AuthError | null }>;
   logout: () => Promise<void>;
-  initialize: () => Promise<void>;
+  initialize: () => Promise<(() => void) | void>;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -46,19 +46,28 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
 
     // Listen for changes
-    supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
         await syncUserRole(session.user, set);
       } else {
         set({ session: null, user: null, currentUser: null, isLoading: false });
       }
     });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   },
 }));
 
+let isSyncing = false;
 async function syncUserRole(supabaseUser: SupabaseUser, set: (state: Partial<AuthState>) => void) {
+  if (isSyncing) return;
+  isSyncing = true;
+
   if (!supabaseUser.email) {
     set({ session: null, user: null, currentUser: null, isLoading: false });
+    isSyncing = false;
     return;
   }
 
@@ -129,5 +138,7 @@ async function syncUserRole(supabaseUser: SupabaseUser, set: (state: Partial<Aut
   } catch (error) {
     console.error('Error syncing user role:', error);
     set({ isLoading: false });
+  } finally {
+    isSyncing = false;
   }
 }
