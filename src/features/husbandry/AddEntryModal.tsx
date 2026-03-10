@@ -35,7 +35,28 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
   const [logType, setLogType] = useState<LogType>(initialType);
   const [date, setDate] = useState(initialDate);
   const [value, setValue] = useState(existingLog?.value || '');
-  const [notes, setNotes] = useState(existingLog?.notes || '');
+  const [notes, setNotes] = useState(() => {
+    if (existingLog?.log_type === LogType.FEED && existingLog.notes) {
+      try {
+        const parsed = JSON.parse(existingLog.notes);
+        return parsed.userNotes || '';
+      } catch {
+        return existingLog.notes;
+      }
+    }
+    return existingLog?.notes || '';
+  });
+  const [cast, setCast] = useState<'AM' | 'PM' | 'NO' | 'N/A'>(() => {
+    if (existingLog?.log_type === LogType.FEED && existingLog.notes) {
+      try {
+        const parsed = JSON.parse(existingLog.notes);
+        return parsed.cast || 'N/A';
+      } catch {
+        return 'N/A';
+      }
+    }
+    return 'N/A';
+  });
   const [weightGrams, setWeightGrams] = useState<number | ''>(existingLog?.weight_grams || '');
   const [baskingTemp, setBaskingTemp] = useState<number | ''>(existingLog?.basking_temp_c || '');
   const [coolTemp, setCoolTemp] = useState<number | ''>(existingLog?.cool_temp_c || '');
@@ -44,6 +65,7 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
   const [isWeatherLoading, setIsWeatherLoading] = useState(false);
 
   const handleFetchWeatherInsideModal = async () => {
+    if (isWeatherLoading) return;
     setIsWeatherLoading(true);
     try {
       const weather = await getMaidstoneDailyWeather();
@@ -67,7 +89,7 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
       log_type: logType,
       log_date: date,
       value: value || logType,
-      notes,
+      notes: logType === LogType.FEED ? JSON.stringify({ cast, feedTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), userNotes: notes }) : notes,
     };
 
     if (logType === LogType.WEIGHT && weightGrams !== '') {
@@ -160,6 +182,19 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
                 </div>
               </div>
             )}
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Cast</label>
+              <select 
+                value={cast} 
+                onChange={_ => setCast(_.target.value as 'AM' | 'PM' | 'NO' | 'N/A')}
+                className="w-full p-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-0 transition-all font-bold"
+              >
+                <option value="AM">AM</option>
+                <option value="PM">PM</option>
+                <option value="NO">NO</option>
+                <option value="N/A">N/A</option>
+              </select>
+            </div>
           </div>
         );
       case LogType.TEMPERATURE:

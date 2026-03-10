@@ -1,13 +1,21 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { usePermissions } from '../../../hooks/usePermissions';
 import { useSafetyDrillData } from '../useSafetyDrillData';
 import { useAppData } from '../../../context/Context';
+import { useTimesheetData } from '../../staff/useTimesheetData';
 import { SafetyDrill } from '../../../types';
-import { ShieldAlert, Plus, Clock, Users, Timer, X, Trash2, UserCheck, Check, Loader2, Search, Siren, Lock } from 'lucide-react';
+import { ShieldAlert, Plus, Clock, Users, Timer, X, Trash2, UserCheck, Loader2, Search, Siren, Lock } from 'lucide-react';
+import { LiveAttendanceRegister } from '../components/LiveAttendanceRegister';
 
 const SafetyDrills: React.FC = () => {
   const { view_safety_drills } = usePermissions();
   const { drills, isLoading, addDrillLog, deleteDrillLog } = useSafetyDrillData();
+  const { getCurrentlyClockedInStaff } = useTimesheetData();
+  const [currentlyClockedIn, setCurrentlyClockedIn] = useState<string[]>([]);
+
+  useEffect(() => {
+    getCurrentlyClockedInStaff().then(setCurrentlyClockedIn);
+  }, [getCurrentlyClockedInStaff]);
 
   const { users } = useAppData(); // Assuming users are available in AppContext
   
@@ -19,7 +27,7 @@ const SafetyDrills: React.FC = () => {
   const [drillType, setDrillType] = useState('Fire');
   const [duration, setDuration] = useState('');
   const [notes, setNotes] = useState('');
-  const [verifiedUserIds, setVerifiedUserIds] = useState<Set<string>>(new Set());
+  const [attendance, setAttendance] = useState<Record<string, boolean>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('ALL');
 
@@ -43,19 +51,10 @@ const SafetyDrills: React.FC = () => {
     );
   }
 
-  const toggleVerification = (userId: string) => {
-    setVerifiedUserIds(prev => {
-      const next = new Set(prev);
-      if (next.has(userId)) next.delete(userId);
-      else next.add(userId);
-      return next;
-    });
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const verifiedList = users.filter(u => verifiedUserIds.has(u.id)).map(u => u.name).join(', ');
-    const missingList = users.filter(u => !verifiedUserIds.has(u.id)).map(u => u.name).join(', ');
+    const verifiedNames = Object.entries(attendance).filter(([_, accounted]) => accounted).map(([name]) => name).join(', ');
+    const missingNames = Object.entries(attendance).filter(([_, accounted]) => !accounted).map(([name]) => name).join(', ');
 
     await addDrillLog({
       date,
@@ -66,10 +65,11 @@ const SafetyDrills: React.FC = () => {
       description: JSON.stringify({
         time,
         duration,
-        totalOnSite: users.length,
-        verifiedNames: verifiedList,
-        missingNames: missingList,
-        performanceNotes: notes
+        totalOnSite: currentlyClockedIn.length,
+        verifiedNames,
+        missingNames,
+        performanceNotes: notes,
+        attendance
       }),
       timestamp: new Date(`${date}T${time}`).getTime()
     });
@@ -77,7 +77,7 @@ const SafetyDrills: React.FC = () => {
     setIsModalOpen(false);
     setDuration('');
     setNotes('');
-    setVerifiedUserIds(new Set());
+    setAttendance({});
   };
 
   const parseDrillDesc = (desc: string) => {
@@ -222,21 +222,13 @@ const SafetyDrills: React.FC = () => {
               <div className="space-y-4">
                 <div className="flex justify-between items-center px-1">
                   <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><Users size={16}/> Active Staff Roll Call</h3>
-                  <span className="text-xs font-medium px-2 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">{verifiedUserIds.size} / {users.length} Present</span>
+                  <span className="text-xs font-medium px-2 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">{Object.values(attendance).filter(Boolean).length} / {currentlyClockedIn.length} Present</span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {users.map((p) => (
-                    <button key={p.id} type="button" onClick={() => toggleVerification(p.id)} className={`flex items-center justify-between p-3 rounded-lg border transition-all ${verifiedUserIds.has(p.id) ? 'bg-emerald-50 border-emerald-500 text-emerald-900 shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'}`}>
-                      <span className="text-sm font-medium">{p.name}</span>
-                      <div className={`w-5 h-5 rounded-full border flex items-center justify-center ${verifiedUserIds.has(p.id) ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-300 bg-white'}`}>{verifiedUserIds.has(p.id) && <Check size={12}/>}</div>
-                    </button>
-                  ))}
-                  {users.length === 0 && (
-                     <div className="col-span-2 py-6 text-center border border-dashed border-slate-200 rounded-lg">
-                       <p className="text-sm text-slate-400 font-medium italic">No personnel found.</p>
-                     </div>
-                  )}
-                </div>
+                <LiveAttendanceRegister 
+                  value={attendance} 
+                  onChange={setAttendance} 
+                  currentlyClockedIn={currentlyClockedIn}
+                />
               </div>
 
               <div><label className="block text-sm font-medium text-slate-700 mb-1">Performance Observations</label><textarea value={notes} onChange={e => setNotes(e.target.value)} className={`${inputClass} resize-none h-24`} placeholder="Record readiness speed, compliance errors, or equipment issues..."/></div>

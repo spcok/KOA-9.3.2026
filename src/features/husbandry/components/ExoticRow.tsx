@@ -37,13 +37,13 @@ export const ExoticRow: React.FC<ExoticRowProps> = ({ animal, getTodayLog, onCel
               <div className="py-2 flex flex-col items-center bg-slate-50/50">
                 <span className="text-[8px] font-black text-slate-400 uppercase">BASK</span>
                 <span className="text-xs font-bold text-slate-800">
-                  {getTodayLog(animal.id, LogType.TEMPERATURE)?.value.split('|')[0] || '--'}
+                  {getTodayLog(animal.id, LogType.TEMPERATURE)?.value?.split('|')[0] ?? '--'}
                 </span>
               </div>
               <div className="py-2 flex flex-col items-center">
                 <span className="text-[8px] font-black text-slate-400 uppercase">COOL</span>
                 <span className="text-xs font-bold text-slate-800">
-                  {getTodayLog(animal.id, LogType.TEMPERATURE)?.value.split('|')[1] || '--'}
+                  {getTodayLog(animal.id, LogType.TEMPERATURE)?.value?.split('|')[1] ?? '--'}
                 </span>
               </div>
             </>

@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { IncidentType, IncidentSeverity } from '../../../types';
 import { usePermissions } from '../../../hooks/usePermissions';
 import { useIncidentData } from '../useIncidentData';
-import { ShieldAlert, Plus, Clock, X, AlertTriangle, MapPin, Trash2, Loader2, Search, Lock } from 'lucide-react';
+import { useTimesheetData } from '../../staff/useTimesheetData';
+import { ShieldAlert, Plus, Clock, X, AlertTriangle, MapPin, Trash2, Loader2, Search, Lock, Users } from 'lucide-react';
+import { LiveAttendanceRegister } from '../components/LiveAttendanceRegister';
 
 const Incidents: React.FC = () => {
   const { view_incidents } = usePermissions();
@@ -16,6 +18,13 @@ const Incidents: React.FC = () => {
     addIncident, 
     deleteIncident 
   } = useIncidentData();
+  const { getCurrentlyClockedInStaff } = useTimesheetData();
+  const [currentlyClockedIn, setCurrentlyClockedIn] = useState<string[]>([]);
+  const [attendance, setAttendance] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    getCurrentlyClockedInStaff().then(setCurrentlyClockedIn);
+  }, [getCurrentlyClockedInStaff]);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -53,7 +62,7 @@ const Incidents: React.FC = () => {
           time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }), 
           type: type, 
           severity, 
-          description,
+          description: type === IncidentType.FIRE ? JSON.stringify({ description, attendance }) : description,
           location: location || 'Site Wide', 
           status: 'Open', 
           reported_by: 'SYS',
@@ -198,6 +207,19 @@ const Incidents: React.FC = () => {
                             </div>
                         </div>
                         <div><label className="block text-sm font-medium text-slate-700 mb-1">Official Account / Description</label><textarea required value={description} onChange={e => setDescription(e.target.value)} className={`${inputClass} resize-none h-32`} placeholder="Detailed narrative..."/></div>
+                        {type === IncidentType.FIRE && (
+                            <div className="space-y-4 pt-4 border-t border-slate-100">
+                                <div className="flex justify-between items-center px-1">
+                                    <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2"><Users size={16}/> Active Staff Roll Call</h3>
+                                    <span className="text-xs font-medium px-2 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">{Object.values(attendance).filter(Boolean).length} / {currentlyClockedIn.length} Present</span>
+                                </div>
+                                <LiveAttendanceRegister 
+                                    value={attendance} 
+                                    onChange={setAttendance} 
+                                    currentlyClockedIn={currentlyClockedIn}
+                                />
+                            </div>
+                        )}
                         <button type="submit" className="w-full py-2 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 transition-colors shadow-sm">Commit to Ledger</button>
                     </form>
                 </div>

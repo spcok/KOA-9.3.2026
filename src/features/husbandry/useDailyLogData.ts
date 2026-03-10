@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { LogEntry, LogType } from '../../types';
 import { db } from '../../lib/db';
 import { useAnimalsData } from '../animals/useAnimalsData';
+import { mutateOnlineFirst } from '../../lib/dataEngine';
 
 export const useDailyLogData = (viewDate: string, activeCategory: string) => {
   const { animals, isLoading: animalsLoading } = useAnimalsData();
@@ -32,7 +33,7 @@ export const useDailyLogData = (viewDate: string, activeCategory: string) => {
   }, [logs]);
 
   const addLogEntry = useCallback(async (entry: Partial<LogEntry>) => {
-    await db.daily_logs.add(entry as LogEntry);
+    await mutateOnlineFirst('daily_logs', entry as Record<string, unknown>, 'upsert');
     await fetchLogs().then(logs => setLogs(logs));
   }, [fetchLogs]);
 

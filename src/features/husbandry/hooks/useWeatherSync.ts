@@ -7,12 +7,14 @@ export const useWeatherSync = (
   animals: Animal[],
   getTodayLog: (animalId: string, type: LogType) => LogEntry | undefined,
   addLogEntry: (entry: LogEntry) => Promise<void>,
-  viewDate: string
+  viewDate: string,
+  isProcessing: React.MutableRefObject<Set<string>>
 ) => {
   const [isSyncing, setIsSyncing] = useState(false);
-  const isSaving = useRef<Set<string>>(new Set());
+  const isMounted = useRef(false);
 
   useEffect(() => {
+    isMounted.current = true;
     const syncWeather = async () => {
       const today = new Date().toISOString().split('T')[0];
       if (viewDate !== today) return;
@@ -22,17 +24,19 @@ export const useWeatherSync = (
         animal =>
           (animal.category === AnimalCategory.OWLS || animal.category === AnimalCategory.RAPTORS) &&
           !getTodayLog(animal.id, LogType.TEMPERATURE) &&
-          !isSaving.current.has(animal.id)
+          !isProcessing.current.has(animal.id)
       );
 
       if (birdsToSync.length === 0) return;
 
+      if (!isMounted.current) return;
       setIsSyncing(true);
       try {
         const weather = await getMaidstoneDailyWeather();
         
         for (const bird of birdsToSync) {
-          isSaving.current.add(bird.id);
+          if (isProcessing.current.has(bird.id)) continue;
+          isProcessing.current.add(bird.id);
           try {
             await addLogEntry({
               id: uuidv4(),
@@ -44,20 +48,24 @@ export const useWeatherSync = (
             });
           } catch (error) {
             console.error('Fetch failed', error);
-            isSaving.current.delete(bird.id);
+          } finally {
+            isProcessing.current.delete(bird.id);
           }
         }
       } catch (error) {
         console.error('Failed to auto-sync weather for birds:', error);
         // If weather fetch fails, unlock all birds we intended to sync
-        birdsToSync.forEach(bird => isSaving.current.delete(bird.id));
+        birdsToSync.forEach(bird => isProcessing.current.delete(bird.id));
       } finally {
-        setIsSyncing(false);
+        if (isMounted.current) setIsSyncing(false);
       }
     };
 
     syncWeather();
-  }, [animals, getTodayLog, addLogEntry, viewDate]);
+    return () => {
+      isMounted.current = false;
+    };
+  }, [animals, getTodayLog, addLogEntry, viewDate, isProcessing]);
 
   return { isSyncing };
 };

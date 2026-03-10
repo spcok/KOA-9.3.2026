@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Animal, LogEntry, LogType, AnimalCategory } from '../../types';
 import { useDailyLogData } from './useDailyLogData';
@@ -11,9 +11,10 @@ import { ExoticRow } from './components/ExoticRow';
 const DailyLog: React.FC = () => {
   const [viewDate] = useState(new Date().toISOString().split('T')[0]);
   const [activeCategory, setActiveCategory] = useState<AnimalCategory>(AnimalCategory.OWLS);
+  const isProcessing = useRef<Set<string>>(new Set());
   
   const { animals, getTodayLog, addLogEntry, isLoading } = useDailyLogData(viewDate, activeCategory);
-  const { isSyncing } = useWeatherSync(animals, getTodayLog, addLogEntry, viewDate);
+  const { isSyncing } = useWeatherSync(animals, getTodayLog, addLogEntry, viewDate, isProcessing);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedAnimal, setSelectedAnimal] = useState<Animal | null>(null);
@@ -123,9 +124,15 @@ const DailyLog: React.FC = () => {
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
           onSave={async (entry) => {
-            if (!entry.id) entry.id = uuidv4();
-            await addLogEntry(entry as LogEntry);
-            setIsModalOpen(false);
+            if (entry.animal_id && isProcessing.current.has(entry.animal_id)) return;
+            if (entry.animal_id) isProcessing.current.add(entry.animal_id);
+            try {
+              if (!entry.id) entry.id = uuidv4();
+              await addLogEntry(entry as LogEntry);
+              setIsModalOpen(false);
+            } finally {
+              if (entry.animal_id) isProcessing.current.delete(entry.animal_id);
+            }
           }}
           animal={selectedAnimal}
           initialType={selectedType}

@@ -15,11 +15,11 @@ export function useMaintenanceData() {
   const logs = logsData || [];
 
   const addLog = async (log: Omit<MaintenanceLog, 'id'>) => {
-    const newLog = {
+    const newLog: MaintenanceLog = {
       ...log,
       id: uuidv4(),
     };
-    await mutateOnlineFirst('maintenance_logs', newLog as Record<string, unknown>, 'upsert');
+    await mutateOnlineFirst('maintenance_logs', newLog as unknown as Record<string, unknown>, 'upsert');
   };
 
   const updateLog = async (log: MaintenanceLog) => {

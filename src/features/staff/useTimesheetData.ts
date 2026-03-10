@@ -12,6 +12,36 @@ export function useTimesheetData() {
     []
   );
 
+  const clockIn = async (staff_name: string) => {
+    console.log('Clocking in:', staff_name);
+    const newTimesheet: Timesheet = {
+      id: uuidv4(),
+      staff_name,
+      date: new Date().toISOString().split('T')[0],
+      clock_in: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      status: TimesheetStatus.ACTIVE
+    };
+    await mutateOnlineFirst('timesheets', newTimesheet as unknown as Record<string, unknown>, 'upsert');
+  };
+
+  const clockOut = async (id: string) => {
+    console.log('Clocking out:', id);
+    const timesheet = await db.timesheets.get(id);
+    if (timesheet) {
+      const updatedTimesheet = {
+        ...timesheet,
+        clock_out: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: TimesheetStatus.COMPLETED
+      };
+      await mutateOnlineFirst('timesheets', updatedTimesheet as unknown as Record<string, unknown>, 'upsert');
+    }
+  };
+
+  const getCurrentlyClockedInStaff = async () => {
+    const active = await db.timesheets.where('status').equals(TimesheetStatus.ACTIVE).toArray();
+    return active.map(t => t.staff_name);
+  };
+
   const addTimesheet = async (timesheet: Omit<Timesheet, 'id'>) => {
     const newTimesheet = {
       ...timesheet,
@@ -24,39 +54,12 @@ export function useTimesheetData() {
     await mutateOnlineFirst('timesheets', { id }, 'delete');
   };
 
-  const seedTimesheets = async () => {
-    const count = await db.timesheets.count();
-    if (count === 0) {
-      const seeds = [
-        {
-          id: uuidv4(),
-          staff_name: 'John Doe',
-          date: new Date().toISOString().split('T')[0],
-          clock_in: '08:00',
-          clock_out: '16:00',
-          total_hours: 8,
-          notes: 'Completed shift',
-          status: TimesheetStatus.COMPLETED
-        },
-        {
-          id: uuidv4(),
-          staff_name: 'Jane Smith',
-          date: new Date().toISOString().split('T')[0],
-          clock_in: '09:00',
-          status: TimesheetStatus.ACTIVE
-        }
-      ];
-      
-      for (const seed of seeds) {
-        await mutateOnlineFirst('timesheets', seed as unknown as Record<string, unknown>, 'upsert');
-      }
-    }
-  };
-
   return {
     timesheets: timesheets || [],
+    clockIn,
+    clockOut,
+    getCurrentlyClockedInStaff,
     addTimesheet,
-    deleteTimesheet,
-    seedTimesheets
+    deleteTimesheet
   };
 }

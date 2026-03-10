@@ -64,11 +64,15 @@ export const generateReportBlob = async (
   config?: ReportConfig
 ): Promise<Blob> => {
   let imageBuffer: ArrayBuffer | null = null;
-  if (config?.logoUrl) {
-    try {
+  
+  // Try to fetch logo, fallback to local asset
+  try {
+    if (config?.logoUrl) {
       const response = await fetch(config.logoUrl);
       imageBuffer = await response.arrayBuffer();
-    } catch (e) { console.error("Logo fetch failed", e); }
+    }
+  } catch (e) {
+    console.error("Logo fetch failed", e);
   }
 
   const datePeriod = config 
@@ -257,13 +261,12 @@ export const exportMovementsDocx = async () => {
 
 export const exportMaintenanceDocx = async () => {
   const logs = await db.maintenance_logs.toArray();
-  const headers = ['Date', 'Item', 'Priority', 'Status', 'Assigned To'];
+  const headers = ['Date', 'Enclosure', 'Task', 'Status'];
   const rows = logs.map(m => [
-    new Date(m.log_date).toLocaleDateString(),
-    m.title,
-    m.priority,
-    m.status,
-    m.user_initials
+    new Date(m.date_logged).toLocaleDateString(),
+    m.enclosure_id,
+    m.task_type,
+    m.status
   ]);
 
   return saveReportDocx("Site Maintenance Report", "Kent Owl Academy Compliance Report", headers, rows, "Maintenance_Report");

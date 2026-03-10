@@ -1,29 +1,27 @@
 import React, { useState, useMemo } from 'react';
-import { Wrench, Plus, X, AlertCircle, CheckCircle2, Clock, MapPin, Search, Trash2, Edit2, History, Lock } from 'lucide-react';
+import { Wrench, Plus, X, AlertCircle, CheckCircle2, Clock, Search, Trash2, Edit2, History, Lock } from 'lucide-react';
 import { useMaintenanceData } from '../useMaintenanceData';
 import { MaintenanceLog } from '../../../types';
-import { useAppData } from '../../../context/Context';
 import { usePermissions } from '../../../hooks/usePermissions';
 
 const SiteMaintenance: React.FC = () => {
   const { view_maintenance } = usePermissions();
   const { logs, addLog, updateLog, deleteLog } = useMaintenanceData();
-  const { users } = useAppData();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLog, setEditingLog] = useState<MaintenanceLog | null>(null);
 
-  const [formTitle, setFormTitle] = useState('');
+  const [formEnclosureId, setFormEnclosureId] = useState('');
+  const [formTaskType, setFormTaskType] = useState<'UV Replacement' | 'Structural Repair' | 'General'>('General');
   const [formDesc, setFormDesc] = useState('');
-  const [formLoc, setFormLoc] = useState('');
-  const [formPriority, setFormPriority] = useState<'Low' | 'Medium' | 'High'>('Medium');
-  const [formStatus, setFormStatus] = useState<'Pending' | 'In Progress' | 'Resolved'>('Pending');
+  const [formStatus, setFormStatus] = useState<'Pending' | 'Completed'>('Pending');
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'ALL' | 'Pending' | 'In Progress' | 'Resolved'>('ALL');
+  const [filterStatus, setFilterStatus] = useState<'ALL' | 'Pending' | 'Completed'>('ALL');
 
   const filteredLogs = useMemo(() => {
     return logs.filter(log => {
-      const matchesSearch = log.title.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = log.description.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            log.enclosure_id.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesFilter = filterStatus === 'ALL' || log.status === filterStatus;
       return matchesSearch && matchesFilter;
     });
@@ -44,17 +42,15 @@ const SiteMaintenance: React.FC = () => {
   const openModal = (log?: MaintenanceLog) => {
     if (log) {
       setEditingLog(log);
-      setFormTitle(log.title);
+      setFormEnclosureId(log.enclosure_id);
+      setFormTaskType(log.task_type);
       setFormDesc(log.description);
-      setFormLoc(log.location);
-      setFormPriority(log.priority);
       setFormStatus(log.status);
     } else {
       setEditingLog(null);
-      setFormTitle('');
+      setFormEnclosureId('');
+      setFormTaskType('General');
       setFormDesc('');
-      setFormLoc('');
-      setFormPriority('Medium');
       setFormStatus('Pending');
     }
     setIsModalOpen(true);
@@ -63,13 +59,11 @@ const SiteMaintenance: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const logData = {
-      title: formTitle,
+      enclosure_id: formEnclosureId,
+      task_type: formTaskType,
       description: formDesc,
-      location: formLoc,
-      priority: formPriority,
       status: formStatus,
-      log_date: editingLog ? editingLog.log_date : new Date(),
-      user_initials: users[0]?.initials || 'SYS' // Fallback to first user
+      date_logged: editingLog ? editingLog.date_logged : new Date().toISOString(),
     };
 
     if (editingLog) {
@@ -78,22 +72,6 @@ const SiteMaintenance: React.FC = () => {
       await addLog(logData);
     }
     setIsModalOpen(false);
-  };
-
-  const getPriorityColor = (p: string) => {
-    switch(p) {
-      case 'High': return 'text-rose-700 bg-rose-50 border-rose-200';
-      case 'Medium': return 'text-amber-700 bg-amber-50 border-amber-200';
-      default: return 'text-blue-700 bg-blue-50 border-blue-200';
-    }
-  };
-
-  const getStatusIcon = (s: string) => {
-    switch(s) {
-      case 'Resolved': return <CheckCircle2 size={16} className="text-emerald-500" />;
-      case 'In Progress': return <Clock size={16} className="text-blue-500" />;
-      default: return <AlertCircle size={16} className="text-slate-400" />;
-    }
   };
 
   const inputClass = "w-full px-3 py-2 bg-white border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder-slate-400";
@@ -130,13 +108,12 @@ const SiteMaintenance: React.FC = () => {
       <div className="flex flex-wrap gap-2">
         {[
           { id: 'ALL', label: 'All Tasks' },
-          { id: 'Pending', label: 'Reported' },
-          { id: 'In Progress', label: 'Active' },
-          { id: 'Resolved', label: 'Completed' }
+          { id: 'Pending', label: 'Pending' },
+          { id: 'Completed', label: 'Completed' }
         ].map(tab => (
           <button
             key={tab.id}
-            onClick={() => setFilterStatus(tab.id as 'ALL' | 'Pending' | 'In Progress' | 'Resolved')}
+            onClick={() => setFilterStatus(tab.id as 'ALL' | 'Pending' | 'Completed')}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
               filterStatus === tab.id ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
             }`}
@@ -152,15 +129,15 @@ const SiteMaintenance: React.FC = () => {
             <div className="p-5 border-b border-slate-100 flex justify-between items-start">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className={`px-2 py-1 rounded text-xs font-medium border ${getPriorityColor(log.priority)}`}>
-                    {log.priority} Priority
+                  <span className={`px-2 py-1 rounded text-xs font-medium border bg-blue-50 text-blue-700 border-blue-200`}>
+                    {log.task_type}
                   </span>
                   <span className="text-xs font-medium text-slate-500 flex items-center gap-1">
-                    {getStatusIcon(log.status)} {log.status}
+                    {log.status === 'Completed' ? <CheckCircle2 size={16} className="text-emerald-500" /> : <AlertCircle size={16} className="text-slate-400" />} {log.status}
                   </span>
                 </div>
                 <h3 className="font-semibold text-slate-900 text-lg leading-tight group-hover:text-blue-600 transition-colors">
-                  {log.title}
+                  {log.enclosure_id}
                 </h3>
               </div>
               <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -176,26 +153,19 @@ const SiteMaintenance: React.FC = () => {
 
               <div className="flex items-center justify-between pt-2 text-sm text-slate-500">
                 <div className="flex items-center gap-1.5">
-                  <MapPin size={14} className="text-slate-400" />
-                  {log.location}
-                </div>
-                <div className="flex items-center gap-1.5">
                   <Clock size={14} className="text-slate-400" />
-                  {new Date(log.log_date).toLocaleDateString('en-GB')}
+                  {new Date(log.date_logged).toLocaleDateString('en-GB')}
                 </div>
               </div>
             </div>
 
             <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex justify-between items-center rounded-b-xl">
-              <div className="text-xs font-medium text-slate-500 flex items-center gap-1">
-                Reported By: <span className="text-slate-700 font-semibold">{log.user_initials || 'SYS'}</span>
-              </div>
-              {log.status !== 'Resolved' && (
+              {log.status !== 'Completed' && (
                 <button 
-                  onClick={() => updateLog({ ...log, status: 'Resolved' })}
+                  onClick={() => updateLog({ ...log, status: 'Completed', date_completed: new Date().toISOString() })}
                   className="text-xs font-medium text-emerald-600 hover:text-emerald-700 flex items-center gap-1 px-2 py-1 hover:bg-emerald-50 rounded transition-colors"
                 >
-                  <CheckCircle2 size={14}/> Mark Resolved
+                  <CheckCircle2 size={14}/> Mark Completed
                 </button>
               )}
             </div>
@@ -222,30 +192,23 @@ const SiteMaintenance: React.FC = () => {
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Task Title</label>
-                  <input required value={formTitle} onChange={e => setFormTitle(e.target.value)} className={inputClass} placeholder="e.g. Broken Fence Rail"/>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Enclosure ID</label>
+                  <input required value={formEnclosureId} onChange={e => setFormEnclosureId(e.target.value)} className={inputClass} placeholder="e.g. Lion Enclosure North"/>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Location</label>
-                  <input required value={formLoc} onChange={e => setFormLoc(e.target.value)} className={inputClass} placeholder="e.g. Lion Enclosure North"/>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Task Type</label>
+                  <select value={formTaskType} onChange={e => setFormTaskType(e.target.value as 'UV Replacement' | 'Structural Repair' | 'General')} className={inputClass}>
+                    <option value="General">General</option>
+                    <option value="UV Replacement">UV Replacement</option>
+                    <option value="Structural Repair">Structural Repair</option>
+                  </select>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Priority</label>
-                    <select value={formPriority} onChange={e => setFormPriority(e.target.value as 'Low' | 'Medium' | 'High')} className={inputClass}>
-                      <option value="Low">Low</option>
-                      <option value="Medium">Medium</option>
-                      <option value="High">High</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
-                    <select value={formStatus} onChange={e => setFormStatus(e.target.value as 'Pending' | 'In Progress' | 'Resolved')} className={inputClass}>
-                      <option value="Pending">Reported</option>
-                      <option value="In Progress">In Progress</option>
-                      <option value="Resolved">Resolved</option>
-                    </select>
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                  <select value={formStatus} onChange={e => setFormStatus(e.target.value as 'Pending' | 'Completed')} className={inputClass}>
+                    <option value="Pending">Pending</option>
+                    <option value="Completed">Completed</option>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Description</label>

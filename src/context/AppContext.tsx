@@ -1,8 +1,15 @@
 import React, { ReactNode } from 'react';
 import { AnimalCategory, UserRole } from '../types';
 import { AppContext, AppContextType } from './Context';
+import { useTimesheetData } from '../features/staff/useTimesheetData';
+import { useAuthStore } from '../store/authStore';
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const { clockIn, clockOut, timesheets } = useTimesheetData();
+  const { currentUser } = useAuthStore();
+
+  const activeShift = timesheets.find(t => t.staff_name === currentUser?.name && !t.clock_out);
+
   const value: AppContextType = {
     foodOptions: ['Day Old Chick', 'Mouse (S)', 'Mouse (M)', 'Mouse (L)', 'Rat (S)', 'Rat (M)', 'Quail', 'Rabbit'],
     feedMethods: {
@@ -12,9 +19,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       [AnimalCategory.EXOTICS]: ['Tongs', 'Bowl Fed'],
     },
     eventTypes: ['Training', 'Public Display', 'Medical Treatment', 'Cleaning', 'Moulting'],
-    activeShift: null,
-    clockIn: async () => {},
-    clockOut: async () => {},
+    activeShift: activeShift || null,
+    clockIn: async (initials: string) => await clockIn(currentUser?.name || 'Unknown'),
+    clockOut: async () => {
+      if (activeShift) await clockOut(activeShift.id);
+    },
     orgProfile: {
       name: 'Kent Owl Academy',
       logo_url: 'https://picsum.photos/seed/koa/200/200',

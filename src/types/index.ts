@@ -112,6 +112,10 @@ export interface Animal {
   is_dob_unknown?: boolean;
   sex?: 'Male' | 'Female' | 'Unknown';
   microchip_id?: string;
+  disposition_status?: 'Active' | 'Transferred' | 'Deceased';
+  origin_location?: string;
+  destination_location?: string;
+  transfer_date?: string;
   ring_number?: string;
   has_no_id?: boolean;
   red_list_status?: ConservationStatus;
@@ -199,6 +203,7 @@ export interface UserProfile {
   initials: string;
   job_position?: string;
   permissions?: Partial<UserPermissions>;
+  signature_data?: string;
 }
 
 export interface RolePermissionConfig {
@@ -389,14 +394,12 @@ export interface SafetyDrill {
 
 export interface MaintenanceLog {
   id: string;
-  title: string;
+  enclosure_id: string;
+  task_type: 'UV Replacement' | 'Structural Repair' | 'General';
   description: string;
-  location: string;
-  priority: 'Low' | 'Medium' | 'High';
-  status: 'Pending' | 'In Progress' | 'Resolved';
-  log_date: Date;
-  user_initials: string;
-  attachment_url?: string;
+  status: 'Pending' | 'Completed';
+  date_logged: string;
+  date_completed?: string;
 }
 
 export interface FirstAidLog {
@@ -415,6 +418,7 @@ export enum IncidentType {
   INJURY = 'Injury',
   ILLNESS = 'Illness',
   NEAR_MISS = 'Near Miss',
+  FIRE = 'Fire',
   OTHER = 'Other'
 }
 
@@ -449,6 +453,7 @@ export interface Incident {
 export interface SyncQueueItem {
   id?: number;
   table_name: string;
+  record_id: string;
   operation: 'upsert' | 'delete';
   payload: Record<string, unknown>;
   created_at: string;

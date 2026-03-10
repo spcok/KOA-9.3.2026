@@ -1,7 +1,10 @@
 import { useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { v4 as uuidv4 } from 'uuid';
 import { db, AppDatabase } from './db';
 import { supabase } from './supabase';
+
+// ... (rest of the file)
 
 /**
  * useHybridQuery
@@ -99,27 +102,39 @@ export async function mutateOnlineFirst<T extends { id?: string | number }>(
   payload: T, 
   operation: 'upsert' | 'delete' = 'upsert'
 ) {
+  if (!payload.id) payload.id = uuidv4();
   const table = db[tableName] as import('dexie').Table<unknown, string>;
+
+  const pendingCount = await db.sync_queue.count();
+
   try {
     // Try online
-    if (operation === 'upsert') {
+    if (pendingCount === 0 && navigator.onLine && operation === 'upsert') {
       await supabase.from(tableName).upsert(payload).throwOnError();
       // Update local cache
       await table.put(payload);
-    } else {
+    } else if (pendingCount === 0 && navigator.onLine && operation === 'delete') {
       await supabase.from(tableName).delete().eq('id', (payload as { id: string }).id).throwOnError();
       // Update local cache
       await table.delete((payload as { id: string }).id);
+    } else {
+      throw new Error('Offline or pending queue');
     }
   } catch (error) {
     console.warn('Offline mode: queuing mutation', error);
     // Queue for later
-    await db.sync_queue.add({
-      table_name: tableName,
-      operation,
-      payload,
-      created_at: new Date().toISOString()
-    });
+    const existing = await db.sync_queue.where({ table_name: tableName, record_id: payload.id }).first();
+    if (existing) {
+      await db.sync_queue.put({ ...existing, payload, operation });
+    } else {
+      await db.sync_queue.add({
+        table_name: tableName,
+        record_id: payload.id as string,
+        operation,
+        payload,
+        created_at: new Date().toISOString()
+      });
+    }
     // Update local cache anyway
     if (operation === 'upsert') {
       await table.put(payload);

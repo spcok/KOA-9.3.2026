@@ -142,7 +142,7 @@ export function useDailyRoundData(viewDate: string) {
     };
 
     const currentUser = {
-        signature_image_url: 'https://upload.wikimedia.org/wikipedia/commons/f/f8/John_Hancock_signature.png'
+        signature_data: 'https://upload.wikimedia.org/wikipedia/commons/f/f8/John_Hancock_signature.png'
     };
 
     return {

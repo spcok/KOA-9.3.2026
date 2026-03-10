@@ -12,13 +12,20 @@ import {
   Scale,
   Eye,
   ZoomIn,
-  ZoomOut
+  ZoomOut,
+  Wrench
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
 import { saveAs } from 'file-saver';
 import { renderAsync } from 'docx-preview';
 import { generateReportBlob } from './utils/docxExportService';
 import { db } from '../../lib/db';
+import { useHybridQuery } from '../../lib/dataEngine';
+import { Animal, MaintenanceLog, LogEntry } from '../../types';
+import { DispositionReport } from './components/DispositionReport';
+import { MaintenanceMatrix } from './components/MaintenanceMatrix';
+import { DailyLogReport } from './components/DailyLogReport';
+import { useAuthStore } from '../../store/authStore';
+import { useOrgSettings } from '../settings/useOrgSettings';
 
 interface ReportDefinition {
   id: string;
@@ -32,11 +39,27 @@ interface ReportDefinition {
 const REPORTS: ReportDefinition[] = [
   {
     id: 'husbandry',
-    title: 'Daily Husbandry Log',
+    title: 'Daily log',
     description: 'Export daily feeding, cleaning, and observation records.',
     icon: CalendarDays,
-    exportFn: async () => { return true; }, // Placeholder, logic handled in dashboard
+    exportFn: async () => { return true; },
     columns: ['Date', 'Animal ID', 'Log Type', 'Notes', 'Recorded By']
+  },
+  {
+    id: 'disposition',
+    title: 'Disposition Ledger',
+    description: 'Track animal arrivals, departures, and status changes.',
+    icon: ArrowRightLeft,
+    exportFn: async () => { return true; },
+    columns: ['Date', 'Animal', 'Microchip', 'Status', 'Origin/Dest']
+  },
+  {
+    id: 'maintenance',
+    title: 'Facility Maintenance',
+    description: 'UV bulb tracking and pending work orders.',
+    icon: Wrench,
+    exportFn: async () => { return true; },
+    columns: ['Enclosure', 'Task', 'Status', 'Date']
   },
   {
     id: 'census',
@@ -80,18 +103,18 @@ const REPORTS: ReportDefinition[] = [
   }
 ];
 
-const SECTIONS = ['All Sections', 'Owls', 'Raptors', 'Mammals', 'Reptiles', 'Exotics'];
-
-import { useAuthStore } from '../../store/authStore';
-import { useOrgSettings } from '../settings/useOrgSettings';
-
 export default function ReportsDashboard() {
   const [activeReportId, setActiveReportId] = useState('husbandry');
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
-  const [selectedSection, setSelectedSection] = useState('All Sections');
-  const [isSectionOpen, setIsSectionOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('landscape');
+  const [zoom, setZoom] = useState(1);
   
+  const animals = useHybridQuery<Animal[]>('animals', () => db.animals.toArray(), []);
+  const maintenanceLogs = useHybridQuery<MaintenanceLog[]>('maintenance_logs', () => db.maintenance_logs.toArray(), []);
+  const dailyLogs = useHybridQuery<LogEntry[]>('daily_logs', () => db.daily_logs.toArray(), []);
+
   const { currentUser } = useAuthStore();
   const { settings } = useOrgSettings();
   
@@ -99,7 +122,6 @@ export default function ReportsDashboard() {
   const [docBlob, setDocBlob] = useState<Blob | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [previewZoom, setPreviewZoom] = useState<number>(1);
   const previewContainerRef = useRef<HTMLDivElement>(null);
 
   const activeReport = REPORTS.find(r => r.id === activeReportId) || REPORTS[0];
@@ -240,7 +262,7 @@ export default function ReportsDashboard() {
   return (
     <div className="flex h-[calc(100vh-64px)] bg-slate-50 overflow-hidden font-sans">
       {/* Sidebar */}
-      <div className="w-72 bg-white border-r border-slate-200 flex flex-col shrink-0">
+      <div className="w-72 bg-white border-r border-slate-200 flex flex-col shrink-0 print:hidden">
         <div className="p-6 border-b border-slate-100">
           <div className="flex items-center gap-3 mb-1">
             <div className="bg-blue-100 p-2 rounded-lg">
@@ -279,14 +301,14 @@ export default function ReportsDashboard() {
       {/* Main Content */}
       <div className="flex-grow flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="bg-white border-b border-slate-200 px-8 py-6">
+        <div className="bg-white border-b border-slate-200 px-8 py-6 print:hidden">
           <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
             {activeReport.title}
           </h1>
           <p className="text-slate-500 mt-1">{activeReport.description}</p>
         </div>
 
-        <div className="bg-white border-b border-slate-200 px-8 py-4">
+        <div className="bg-white border-b border-slate-200 px-8 py-4 print:hidden">
           <div className="flex flex-wrap items-end gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Start Date</label>
@@ -308,44 +330,46 @@ export default function ReportsDashboard() {
               />
             </div>
 
-            <div className="relative w-48">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Section</label>
-              <button 
-                onClick={() => setIsSectionOpen(!isSectionOpen)}
-                className="w-full flex items-center justify-between bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-sm text-slate-900 hover:bg-slate-100 transition-colors"
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Orientation</label>
+              <select 
+                value={orientation} 
+                onChange={(e) => setOrientation(e.target.value as 'portrait' | 'landscape')}
+                className="w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <span>{selectedSection}</span>
-                <ChevronRight className={`w-4 h-4 text-slate-400 transition-transform ${isSectionOpen ? 'rotate-90' : ''}`} />
-              </button>
+                <option value="portrait">Portrait</option>
+                <option value="landscape">Landscape</option>
+              </select>
+            </div>
 
-              <AnimatePresence>
-                {isSectionOpen && (
-                  <>
-                    <div className="fixed inset-0 z-30" onClick={() => setIsSectionOpen(false)} />
-                    <motion.div 
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 5 }}
-                      className="absolute top-full left-0 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg z-40 overflow-hidden"
-                    >
-                      {SECTIONS.map(section => (
-                        <button
-                          key={section}
-                          onClick={() => {
-                            setSelectedSection(section);
-                            setIsSectionOpen(false);
-                          }}
-                          className={`w-full text-left px-4 py-2 text-sm transition-colors ${
-                            selectedSection === section ? 'bg-slate-50 text-blue-600 font-medium' : 'text-slate-600 hover:bg-slate-50'
-                          }`}
-                        >
-                          {section}
-                        </button>
-                      ))}
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
+              <select 
+                value={selectedCategory} 
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="ALL">ALL</option>
+                <option value="OWLS">OWLS</option>
+                <option value="RAPTORS">RAPTORS</option>
+                <option value="MAMMALS">MAMMALS</option>
+                <option value="EXOTICS">EXOTICS</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
+              <select 
+                value={selectedCategory} 
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="ALL">ALL</option>
+                <option value="OWLS">OWLS</option>
+                <option value="RAPTORS">RAPTORS</option>
+                <option value="MAMMALS">MAMMALS</option>
+                <option value="EXOTICS">EXOTICS</option>
+              </select>
             </div>
 
             <button
@@ -355,6 +379,12 @@ export default function ReportsDashboard() {
             >
               {isPreviewLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
               Generate Preview
+            </button>
+            <button
+              onClick={() => window.print()}
+              className="bg-slate-600 text-white px-4 py-2 rounded-md hover:bg-slate-700 text-sm font-medium flex items-center justify-center gap-2 transition-colors h-[38px]"
+            >
+              🖨️ Print Report
             </button>
           </div>
         </div>
@@ -367,19 +397,19 @@ export default function ReportsDashboard() {
               <h3 className="text-sm font-bold text-slate-900">Live Preview</h3>
               {docBlob && (
                 <div className="flex items-center">
-                  <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-md px-1 py-1 mr-4">
+                  <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-md px-1 py-1 mr-4 print:hidden">
                     <button 
-                      onClick={() => setPreviewZoom(z => Math.max(0.5, z - 0.1))}
+                      onClick={() => setZoom(z => Math.max(z - 0.1, 0.5))}
                       className="p-1 hover:bg-slate-100 rounded text-slate-600 transition-colors"
                       title="Zoom Out"
                     >
                       <ZoomOut className="w-4 h-4" />
                     </button>
                     <span className="text-sm font-medium text-slate-700 w-12 text-center">
-                      {Math.round(previewZoom * 100)}%
+                      {Math.round(zoom * 100)}%
                     </span>
                     <button 
-                      onClick={() => setPreviewZoom(z => Math.min(2, z + 0.1))}
+                      onClick={() => setZoom(z => Math.min(z + 0.1, 2))}
                       className="p-1 hover:bg-slate-100 rounded text-slate-600 transition-colors"
                       title="Zoom In"
                     >
@@ -399,28 +429,45 @@ export default function ReportsDashboard() {
 
             {/* DOCX Preview Container */}
             <div className="w-full h-[800px] overflow-auto rounded-b-xl border-x border-b border-slate-300 bg-[#f8f9fa] relative">
-              {!docBlob && !isPreviewLoading && !error && (
-                <div className="flex flex-col items-center justify-center text-slate-400 absolute inset-0 pointer-events-none">
-                  <FileText className="w-16 h-16 mb-4 opacity-20" />
-                  <p className="text-sm font-medium">Select parameters and click Generate Preview to view the document here.</p>
-                </div>
+              {activeReportId === 'disposition' ? (
+                <DispositionReport animals={animals || []} />
+              ) : activeReportId === 'maintenance' ? (
+                <MaintenanceMatrix animals={animals || []} logs={maintenanceLogs || []} />
+              ) : activeReportId === 'husbandry' ? (
+                <DailyLogReport 
+                  animals={animals || []} 
+                  logs={dailyLogs || []} 
+                  startDate={startDate} 
+                  endDate={endDate} 
+                  selectedCategory={selectedCategory}
+                  orientation={orientation} 
+                />
+              ) : (
+                <>
+                  {!docBlob && !isPreviewLoading && !error && (
+                    <div className="flex flex-col items-center justify-center text-slate-400 absolute inset-0 pointer-events-none">
+                      <FileText className="w-16 h-16 mb-4 opacity-20" />
+                      <p className="text-sm font-medium">Select parameters and click Generate Preview to view the document here.</p>
+                    </div>
+                  )}
+                  {error && (
+                    <div className="flex flex-col items-center justify-center text-red-500 absolute inset-0 pointer-events-none">
+                      <AlertTriangle className="w-16 h-16 mb-4 opacity-20" />
+                      <p className="text-sm font-medium">{error}</p>
+                    </div>
+                  )}
+                  {isPreviewLoading && (
+                    <div className="flex flex-col items-center justify-center text-slate-400 absolute inset-0 z-10 bg-[#f8f9fa]/80">
+                      <Loader2 className="w-12 h-12 mb-4 animate-spin text-blue-500" />
+                      <p className="text-sm font-medium">Generating document preview...</p>
+                    </div>
+                  )}
+                  
+                  <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }} className={`${docBlob && !isPreviewLoading ? 'block' : 'hidden'}`}>
+                    <div ref={previewContainerRef}></div>
+                  </div>
+                </>
               )}
-              {error && (
-                <div className="flex flex-col items-center justify-center text-red-500 absolute inset-0 pointer-events-none">
-                  <AlertTriangle className="w-16 h-16 mb-4 opacity-20" />
-                  <p className="text-sm font-medium">{error}</p>
-                </div>
-              )}
-              {isPreviewLoading && (
-                <div className="flex flex-col items-center justify-center text-slate-400 absolute inset-0 z-10 bg-[#f8f9fa]/80">
-                  <Loader2 className="w-12 h-12 mb-4 animate-spin text-blue-500" />
-                  <p className="text-sm font-medium">Generating document preview...</p>
-                </div>
-              )}
-              
-              <div style={{ zoom: previewZoom } as React.CSSProperties} className={`${docBlob && !isPreviewLoading ? 'block' : 'hidden'}`}>
-                <div ref={previewContainerRef}></div>
-              </div>
             </div>
           </div>
         </div>

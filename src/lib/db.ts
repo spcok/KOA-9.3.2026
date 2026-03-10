@@ -27,7 +27,7 @@ export class AppDatabase extends Dexie {
 
   constructor() {
     super('KentOwlAcademyDB');
-    this.version(19).stores({
+    this.version(20).stores({
       animals: 'id, name, species, category, location',
       daily_logs: 'id, animal_id, log_type, log_date, created_at',
       tasks: 'id, animal_id, due_date, completed',
@@ -44,7 +44,7 @@ export class AppDatabase extends Dexie {
       contacts: 'id, name, role',
       zla_documents: 'id, name, category',
       safety_drills: 'id, date, title',
-      maintenance_logs: 'id, title, status, priority',
+      maintenance_logs: 'id, enclosure_id, task_type, status',
       first_aid_logs: 'id, date, personName, type',
       incidents: 'id, date, severity',
       daily_rounds: 'id, date, shift, status',

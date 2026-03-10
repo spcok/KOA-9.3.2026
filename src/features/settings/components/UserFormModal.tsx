@@ -1,7 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { X } from 'lucide-react';
 import { User, UserRole } from '../../../types';
+import { SignatureCapture } from '../../../components/ui/SignatureCapture';
 
 interface UserFormModalProps {
   isOpen: boolean;
@@ -15,10 +16,13 @@ interface UserFormInputs {
   email: string;
   role: UserRole;
   initials: string;
+  signature_data?: string;
 }
 
 const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, initialData }) => {
-  const { register, handleSubmit, reset, setValue, formState: { errors } } = useForm<UserFormInputs>();
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<UserFormInputs>();
+  const [isCapturingSignature, setIsCapturingSignature] = useState(false);
+  const signature_data = watch('signature_data');
 
   useEffect(() => {
     if (initialData) {
@@ -26,12 +30,14 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
       setValue('email', initialData.email);
       setValue('role', initialData.role);
       setValue('initials', initialData.initials);
+      setValue('signature_data', initialData.signature_data);
     } else {
       reset({
         name: '',
         email: '',
         role: UserRole.VOLUNTEER,
-        initials: ''
+        initials: '',
+        signature_data: undefined
       });
     }
   }, [initialData, setValue, reset, isOpen]);
@@ -134,6 +140,31 @@ const UserFormModal: React.FC<UserFormModalProps> = ({ isOpen, onClose, onSave, 
                 <option value={UserRole.VOLUNTEER}>Volunteer</option>
               </select>
               {errors.role && <p className="text-rose-500 text-[10px] font-bold uppercase mt-1 ml-1">{errors.role.message}</p>}
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Digital Signature</label>
+              {isCapturingSignature ? (
+                <SignatureCapture
+                  onSave={(base64) => {
+                    setValue('signature_data', base64);
+                    setIsCapturingSignature(false);
+                  }}
+                  onCancel={() => setIsCapturingSignature(false)}
+                  initialSignature={signature_data}
+                />
+              ) : (
+                <div className="space-y-2">
+                  {signature_data && <img src={signature_data} alt="Signature" className="h-16 border border-slate-200 rounded-lg p-1" />}
+                  <button
+                    type="button"
+                    onClick={() => setIsCapturingSignature(true)}
+                    className="w-full p-3 border-2 border-dashed border-slate-200 rounded-2xl font-black uppercase text-[10px] tracking-widest text-slate-500 hover:bg-slate-50 transition-all"
+                  >
+                    {signature_data ? 'Update Signature' : 'Add Signature'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 

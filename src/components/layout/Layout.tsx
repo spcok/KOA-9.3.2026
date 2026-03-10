@@ -190,11 +190,11 @@ const Layout: React.FC<LayoutProps> = () => {
               <button onClick={handleLogout} className="text-slate-500 hover:text-red-400 transition-colors"><LogOut size={16}/></button>
             </div>
             {activeShift ? (
-              <button onClick={() => clockOut()} className="w-full bg-amber-500/10 border border-amber-500/50 text-amber-500 rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-2 hover:bg-amber-500/20 transition-all">
+              <button onClick={() => { console.log('Clock Out clicked'); clockOut(); }} className="w-full bg-amber-500/10 border border-amber-500/50 text-amber-500 rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-2 hover:bg-amber-500/20 transition-all">
                 <Power size={14}/> CLOCK OUT
               </button>
             ) : (
-              <button onClick={() => clockIn(currentUser?.initials || '')} className="w-full bg-emerald-600 text-white rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-2 hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-900/20">
+              <button onClick={() => { console.log('Clock In clicked'); clockIn(currentUser?.initials || ''); }} className="w-full bg-emerald-600 text-white rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-2 hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-900/20">
                 <Clock size={14}/> START SHIFT
               </button>
             )}
@@ -205,11 +205,11 @@ const Layout: React.FC<LayoutProps> = () => {
               <LogOut size={16}/>
             </button>
             {activeShift ? (
-              <button onClick={() => clockOut()} className="w-9 h-9 rounded-lg bg-amber-500/20 text-amber-500 flex items-center justify-center hover:bg-amber-500/30 transition-colors" title="Clock Out">
+              <button onClick={() => { console.log('Clock Out clicked'); clockOut(); }} className="w-9 h-9 rounded-lg bg-amber-500/20 text-amber-500 flex items-center justify-center hover:bg-amber-500/30 transition-colors" title="Clock Out">
                 <Power size={16}/>
               </button>
             ) : (
-              <button onClick={() => clockIn(currentUser?.initials || '')} className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center hover:bg-emerald-500 transition-colors" title="Clock In">
+              <button onClick={() => { console.log('Clock In clicked'); clockIn(currentUser?.initials || ''); }} className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center hover:bg-emerald-500 transition-colors" title="Clock In">
                 <Clock size={16}/>
               </button>
             )}
