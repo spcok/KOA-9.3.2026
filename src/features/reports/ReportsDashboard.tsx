@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   CalendarDays, 
   ListOrdered, 
@@ -11,21 +11,13 @@ import {
   ChevronRight,
   Scale,
   Eye,
-  ZoomIn,
-  ZoomOut,
   Wrench
 } from 'lucide-react';
-import { saveAs } from 'file-saver';
 import { renderAsync } from 'docx-preview';
-import { generateReportBlob } from './utils/docxExportService';
 import { db } from '../../lib/db';
 import { useHybridQuery } from '../../lib/dataEngine';
-import { Animal, MaintenanceLog, LogEntry } from '../../types';
-import { DispositionReport } from './components/DispositionReport';
-import { MaintenanceMatrix } from './components/MaintenanceMatrix';
-import { DailyLogReport } from './components/DailyLogReport';
-import { useAuthStore } from '../../store/authStore';
-import { useOrgSettings } from '../settings/useOrgSettings';
+import { Animal } from '../../types';
+import { generateDailyLogDocx } from './utils/docxExportService';
 
 interface ReportDefinition {
   id: string;
@@ -109,153 +101,66 @@ export default function ReportsDashboard() {
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('landscape');
-  const [zoom, setZoom] = useState(1);
   
   const animals = useHybridQuery<Animal[]>('animals', () => db.animals.toArray(), []);
-  const maintenanceLogs = useHybridQuery<MaintenanceLog[]>('maintenance_logs', () => db.maintenance_logs.toArray(), []);
-  const dailyLogs = useHybridQuery<LogEntry[]>('daily_logs', () => db.daily_logs.toArray(), []);
 
-  const { currentUser } = useAuthStore();
-  const { settings } = useOrgSettings();
-  
   // Preview State
-  const [docBlob, setDocBlob] = useState<Blob | null>(null);
-  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const previewContainerRef = useRef<HTMLDivElement>(null);
 
   const activeReport = REPORTS.find(r => r.id === activeReportId) || REPORTS[0];
 
-  useEffect(() => {
-    if (docBlob && previewContainerRef.current) {
-      previewContainerRef.current.innerHTML = '';
-      renderAsync(docBlob, previewContainerRef.current, previewContainerRef.current, {
-        className: 'docx-preview-page',
-        inWrapper: true,
-        ignoreWidth: false,
-        ignoreHeight: false
-      }).catch(err => console.error("Error rendering docx preview:", err));
-    }
-  }, [docBlob]);
-
   const generatePreview = async () => {
-    setIsPreviewLoading(true);
-    setDocBlob(null);
+    setIsGenerating(true);
+    setPreviewBlob(null);
     setError(null);
 
     try {
-      let data: string[][] = [];
+      if (activeReportId === 'husbandry') {
+        const dates = [];
+        const currentDate = new Date(startDate);
+        const endDateObj = new Date(endDate);
+        while (currentDate <= endDateObj) {
+          dates.push(currentDate.toISOString().split('T')[0]);
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
 
-      switch (activeReportId) {
-        case 'husbandry': {
-          const logs = await db.daily_logs
-            .where('log_date')
-            .between(startDate, endDate, true, true)
-            .toArray();
-          
-          data = logs.map(log => [
-            log.log_date,
-            log.animal_id,
-            log.log_type,
-            log.notes || '',
-            log.user_initials || log.created_by || ''
-          ]);
-          break;
-        }
-        case 'census': {
-          const animals = await db.animals
-            .filter(a => !a.archived)
-            .toArray();
-            
-          data = animals.map(a => [
-            a.name,
-            a.species,
-            a.category,
-            a.sex || 'Unknown',
-            a.location
-          ]);
-          break;
-        }
-        case 'stocklist': {
-          const movements = await db.internal_movements
-            .where('log_date')
-            .between(startDate, endDate, true, true)
-            .toArray();
+        const logs = await db.daily_logs
+          .where('log_date')
+          .between(startDate, endDate, true, true)
+          .toArray();
 
-          data = movements.map(mov => [
-            mov.log_date,
-            mov.animal_name,
-            mov.movement_type,
-            mov.source_location,
-            mov.destination_location,
-            mov.notes || ''
-          ]);
-          break;
-        }
-        case 'rounds': {
-          const rounds = await db.daily_rounds
-            .where('date')
-            .between(startDate, endDate, true, true)
-            .toArray();
-
-          data = rounds.map(r => [
-            r.date,
-            r.shift,
-            r.status,
-            r.completedBy,
-            r.notes || ''
-          ]);
-          break;
-        }
-        case 'incidents': {
-          const incidents = await db.incidents
-            .filter(inc => {
-              const d = new Date(inc.date).toISOString().split('T')[0];
-              return d >= startDate && d <= endDate;
-            })
-            .toArray();
-
-          data = incidents.map(inc => [
-            new Date(inc.date).toLocaleDateString(),
-            inc.type,
-            inc.severity,
-            inc.description,
-            inc.reported_by
-          ]);
-          break;
-        }
-        case 'weight': {
-          data = []; 
-          break;
+        const blob = await generateDailyLogDocx(animals || [], logs, dates, selectedCategory);
+        setPreviewBlob(blob);
+        
+        if (previewContainerRef.current) {
+          await renderAsync(blob, previewContainerRef.current, undefined, {
+            className: 'docx-preview-page',
+            inWrapper: true,
+          });
         }
       }
-
-      const blob = await generateReportBlob(
-        activeReport.title,
-        "Kent Owl Academy Compliance Report",
-        activeReport.columns,
-        data,
-        {
-          logoUrl: settings?.logo_url,
-          reportName: activeReport.title,
-          startDate,
-          endDate,
-          generatedBy: currentUser?.name || 'Staff Member'
-        }
-      );
-      setDocBlob(blob);
-
-    } catch (error) {
-      console.error("Failed to generate preview:", error);
-      setError("Failed to generate preview. Please try again.");
+      // ... handle other reports ...
+    } catch (err) {
+      console.error("Failed to generate preview:", err);
+      setError(err instanceof Error ? err.message : 'Failed to generate report');
     } finally {
-      setIsPreviewLoading(false);
+      setIsGenerating(false);
     }
   };
 
   const handleDownload = () => {
-    if (docBlob) {
-      saveAs(docBlob, `${activeReport.title.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.docx`);
+    if (previewBlob) {
+      const url = URL.createObjectURL(previewBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'Daily_Log.docx';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     }
   };
 
@@ -279,7 +184,7 @@ export default function ReportsDashboard() {
               key={report.id}
               onClick={() => {
                 setActiveReportId(report.id);
-                setDocBlob(null);
+                setPreviewBlob(null);
               }}
               className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 group relative ${
                 activeReportId === report.id 
@@ -357,34 +262,21 @@ export default function ReportsDashboard() {
               </select>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
-              <select 
-                value={selectedCategory} 
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="ALL">ALL</option>
-                <option value="OWLS">OWLS</option>
-                <option value="RAPTORS">RAPTORS</option>
-                <option value="MAMMALS">MAMMALS</option>
-                <option value="EXOTICS">EXOTICS</option>
-              </select>
-            </div>
-
             <button
               onClick={generatePreview}
-              disabled={isPreviewLoading}
+              disabled={isGenerating}
               className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 text-sm font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50 h-[38px]"
             >
-              {isPreviewLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
+              {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
               Generate Preview
             </button>
             <button
-              onClick={() => window.print()}
-              className="bg-slate-600 text-white px-4 py-2 rounded-md hover:bg-slate-700 text-sm font-medium flex items-center justify-center gap-2 transition-colors h-[38px]"
+              onClick={handleDownload}
+              disabled={!previewBlob}
+              className="bg-emerald-600 text-white px-4 py-2 rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium flex items-center gap-2 shadow-sm disabled:opacity-50 h-[38px]"
             >
-              🖨️ Print Report
+              <Download className="w-4 h-4" />
+              Download Report (.docx)
             </button>
           </div>
         </div>
@@ -392,83 +284,9 @@ export default function ReportsDashboard() {
         <div className="flex-grow flex flex-col p-8 overflow-hidden">
           {/* Preview Pane */}
           <div className="flex-grow flex flex-col overflow-hidden bg-slate-100/50 rounded-xl border border-slate-200">
-            {/* Preview Toolbar */}
-            <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-900">Live Preview</h3>
-              {docBlob && (
-                <div className="flex items-center">
-                  <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-md px-1 py-1 mr-4 print:hidden">
-                    <button 
-                      onClick={() => setZoom(z => Math.max(z - 0.1, 0.5))}
-                      className="p-1 hover:bg-slate-100 rounded text-slate-600 transition-colors"
-                      title="Zoom Out"
-                    >
-                      <ZoomOut className="w-4 h-4" />
-                    </button>
-                    <span className="text-sm font-medium text-slate-700 w-12 text-center">
-                      {Math.round(zoom * 100)}%
-                    </span>
-                    <button 
-                      onClick={() => setZoom(z => Math.min(z + 0.1, 2))}
-                      className="p-1 hover:bg-slate-100 rounded text-slate-600 transition-colors"
-                      title="Zoom In"
-                    >
-                      <ZoomIn className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <button
-                    onClick={handleDownload}
-                    className="bg-emerald-600 text-white px-4 py-2 rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium flex items-center gap-2 shadow-sm"
-                  >
-                    <Download className="w-4 h-4" />
-                    Download Report (.docx)
-                  </button>
-                </div>
-              )}
-            </div>
-
+            {error && <div className="p-4 mb-4 text-red-700 bg-red-100 rounded-lg">{error}</div>}
             {/* DOCX Preview Container */}
-            <div className="w-full h-[800px] overflow-auto rounded-b-xl border-x border-b border-slate-300 bg-[#f8f9fa] relative">
-              {activeReportId === 'disposition' ? (
-                <DispositionReport animals={animals || []} />
-              ) : activeReportId === 'maintenance' ? (
-                <MaintenanceMatrix animals={animals || []} logs={maintenanceLogs || []} />
-              ) : activeReportId === 'husbandry' ? (
-                <DailyLogReport 
-                  animals={animals || []} 
-                  logs={dailyLogs || []} 
-                  startDate={startDate} 
-                  endDate={endDate} 
-                  selectedCategory={selectedCategory}
-                  orientation={orientation} 
-                />
-              ) : (
-                <>
-                  {!docBlob && !isPreviewLoading && !error && (
-                    <div className="flex flex-col items-center justify-center text-slate-400 absolute inset-0 pointer-events-none">
-                      <FileText className="w-16 h-16 mb-4 opacity-20" />
-                      <p className="text-sm font-medium">Select parameters and click Generate Preview to view the document here.</p>
-                    </div>
-                  )}
-                  {error && (
-                    <div className="flex flex-col items-center justify-center text-red-500 absolute inset-0 pointer-events-none">
-                      <AlertTriangle className="w-16 h-16 mb-4 opacity-20" />
-                      <p className="text-sm font-medium">{error}</p>
-                    </div>
-                  )}
-                  {isPreviewLoading && (
-                    <div className="flex flex-col items-center justify-center text-slate-400 absolute inset-0 z-10 bg-[#f8f9fa]/80">
-                      <Loader2 className="w-12 h-12 mb-4 animate-spin text-blue-500" />
-                      <p className="text-sm font-medium">Generating document preview...</p>
-                    </div>
-                  )}
-                  
-                  <div style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }} className={`${docBlob && !isPreviewLoading ? 'block' : 'hidden'}`}>
-                    <div ref={previewContainerRef}></div>
-                  </div>
-                </>
-              )}
-            </div>
+            <div ref={previewContainerRef} className="bg-white min-h-[600px] shadow-inner" />
           </div>
         </div>
       </div>

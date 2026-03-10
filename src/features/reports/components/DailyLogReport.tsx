@@ -21,7 +21,7 @@ export const DailyLogReport: React.FC<DailyLogReportProps> = ({ animals, logs, s
 
   const getDatesInRange = (start: string, end: string) => {
     const dates = [];
-    let currentDate = new Date(start);
+    const currentDate = new Date(start);
     const endDateObj = new Date(end);
     while (currentDate <= endDateObj) {
       dates.push(currentDate.toISOString().split('T')[0]);
