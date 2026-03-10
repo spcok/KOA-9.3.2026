@@ -61,7 +61,7 @@ const DailyLog: React.FC = () => {
       case AnimalCategory.RAPTORS:
         return <BirdRow key={animal.id} animal={animal} getTodayLog={getTodayLog} onCellClick={handleCellClick} />;
       case AnimalCategory.MAMMALS:
-        return <MammalRow key={animal.id} animal={animal} getTodayLog={getTodayLog} onCellClick={handleCellClick} addLogEntry={addLogEntry} viewDate={viewDate} />;
+        return <MammalRow key={animal.id} animal={animal} getTodayLog={getTodayLog} onCellClick={handleCellClick} />;
       case AnimalCategory.EXOTICS:
         return <ExoticRow key={animal.id} animal={animal} getTodayLog={getTodayLog} onCellClick={handleCellClick} />;
       default:

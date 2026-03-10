@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { X, Save, Loader2 } from 'lucide-react';
 import { Animal, LogType, LogEntry, AnimalCategory } from '../../types';
@@ -43,23 +43,18 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
   const [healthRecordType, setHealthRecordType] = useState(existingLog?.health_record_type || '');
   const [isWeatherLoading, setIsWeatherLoading] = useState(false);
 
-  useEffect(() => {
-    if (logType === LogType.TEMPERATURE && temperature === '' && !existingLog && animal.category !== AnimalCategory.EXOTICS) {
-      const fetchWeather = async () => {
-        setIsWeatherLoading(true);
-        try {
-          const weather = await getMaidstoneDailyWeather();
-          setTemperature(Math.round(weather.currentTemp));
-          setNotes(prev => prev ? `${prev} | ${weather.description}` : weather.description);
-        } catch (error) {
-          console.error('Failed to auto-fetch weather', error);
-        } finally {
-          setIsWeatherLoading(false);
-        }
-      };
-      fetchWeather();
+  const handleFetchWeatherInsideModal = async () => {
+    setIsWeatherLoading(true);
+    try {
+      const weather = await getMaidstoneDailyWeather();
+      setTemperature(Math.round(weather.currentTemp));
+      setNotes(prev => prev ? `${prev} | ${weather.description}` : weather.description);
+    } catch (error) {
+      console.error('Failed to auto-fetch weather', error);
+    } finally {
+      setIsWeatherLoading(false);
     }
-  }, [logType, temperature, existingLog, animal.category]);
+  };
 
   if (!isOpen) return null;
 
@@ -85,7 +80,7 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
         if (baskingTemp !== '' && coolTemp !== '') {
           entry.basking_temp_c = Number(baskingTemp);
           entry.cool_temp_c = Number(coolTemp);
-          entry.value = `${baskingTemp}°C / ${coolTemp}°C`;
+          entry.value = `${baskingTemp}°C | ${coolTemp}°C`;
           entry.notes = JSON.stringify({ basking: Number(baskingTemp), cool: Number(coolTemp) });
         }
       } else {
@@ -196,21 +191,29 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
         }
         return (
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Temperature (°C)</label>
-            <input 
-              type="number" 
-              value={temperature} 
-              onChange={e => setTemperature(e.target.value ? Number(e.target.value) : '')}
-              className="w-full p-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-0 transition-all font-bold"
-              required
-              disabled={isWeatherLoading}
-            />
-            {isWeatherLoading && (
-              <div className="flex items-center gap-2 text-xs text-emerald-600 mt-2">
-                <Loader2 size={14} className="animate-spin" />
-                <span>☁️ Auto-fetching local weather...</span>
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Temperature (°C)</label>
+                <input 
+                  type="number" 
+                  value={temperature} 
+                  onChange={e => setTemperature(e.target.value ? Number(e.target.value) : '')}
+                  className="w-full p-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-0 transition-all font-bold"
+                  required
+                  disabled={isWeatherLoading}
+                />
               </div>
-            )}
+              {animal.category === AnimalCategory.MAMMALS && (
+                <button 
+                  type="button" 
+                  onClick={handleFetchWeatherInsideModal} 
+                  disabled={isWeatherLoading}
+                  className="px-4 py-3 bg-sky-50 text-sky-700 border-2 border-sky-200 rounded-xl font-bold text-xs uppercase hover:bg-sky-100 flex items-center gap-2 transition-colors disabled:opacity-50"
+                >
+                  {isWeatherLoading ? <Loader2 size={14} className="animate-spin" /> : '☁️ Fetch 13:00'}
+                </button>
+              )}
+            </div>
             {!isWeatherLoading && defaultTemperature !== undefined && !existingLog && temperature === defaultTemperature && (
               <p className="text-xs text-slate-500 mt-1">Auto-filled from local weather</p>
             )}
