@@ -13,8 +13,8 @@ export interface EnhancedAnimal extends Animal {
 }
 
 export interface AnimalStatsData {
-  todayWeight?: { weight_grams?: number; value?: string | number; log_date?: string | Date };
-  previousWeight?: { weight_grams?: number; value?: string | number; log_date?: string | Date };
+  todayWeight?: { weight?: number; weight_unit?: string; weight_grams?: number; value?: string | number; log_date?: string | Date };
+  previousWeight?: { weight?: number; weight_unit?: string; weight_grams?: number; value?: string | number; log_date?: string | Date };
   todayFeed?: { value?: string | number; log_date?: string | Date };
 }
 

@@ -12,7 +12,8 @@ const schema = z.object({
   note_type: z.enum(['Illness', 'Checkup', 'Injury', 'Routine']),
   diagnosis: z.string().optional(),
   bcs: z.number().min(1).max(5).optional(),
-  weight_grams: z.number().positive().optional(),
+  weight: z.number().positive().optional(),
+  weight_unit: z.enum(['g', 'kg', 'oz', 'lbs', 'lbs_oz']).optional(),
   note_text: z.string().min(5, 'Note must be at least 5 characters'),
   treatment_plan: z.string().optional(),
   recheck_date: z.string().optional(),
@@ -47,7 +48,8 @@ export const AddClinicalNoteModal: React.FC<Props> = ({ isOpen, onClose, onSave,
       setValue('note_type', initialData.note_type as 'Illness' | 'Checkup' | 'Injury' | 'Routine');
       setValue('diagnosis', initialData.diagnosis || '');
       setValue('bcs', initialData.bcs);
-      setValue('weight_grams', initialData.weight_grams);
+      setValue('weight', initialData.weight ?? initialData.weight_grams);
+      setValue('weight_unit', initialData.weight_unit || 'g');
       setValue('note_text', initialData.note_text);
       setValue('treatment_plan', initialData.treatment_plan || '');
       setValue('recheck_date', initialData.recheck_date || '');
@@ -56,6 +58,7 @@ export const AddClinicalNoteModal: React.FC<Props> = ({ isOpen, onClose, onSave,
       reset({
         date: new Date().toISOString().split('T')[0],
         note_type: 'Routine',
+        weight_unit: 'g',
       });
     }
   }, [isOpen, initialData, setValue, reset]);
@@ -70,10 +73,18 @@ export const AddClinicalNoteModal: React.FC<Props> = ({ isOpen, onClose, onSave,
         attachment_url = await uploadFile(file, 'medical');
       }
       
+      let weight_grams = undefined;
+      if (data.weight) {
+        if (data.weight_unit === 'g') weight_grams = data.weight;
+        else if (data.weight_unit === 'kg') weight_grams = data.weight * 1000;
+        else if (data.weight_unit === 'oz') weight_grams = data.weight * 28.3495;
+        else if (data.weight_unit === 'lbs') weight_grams = data.weight * 453.592;
+      }
+
       if (initialData) {
-        await onSave({ ...initialData, ...data, attachment_url });
+        await onSave({ ...initialData, ...data, weight_grams, attachment_url });
       } else {
-        await onSave({ ...data, attachment_url });
+        await onSave({ ...data, weight_grams, attachment_url });
       }
       
       reset();
@@ -139,8 +150,16 @@ export const AddClinicalNoteModal: React.FC<Props> = ({ isOpen, onClose, onSave,
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Current Weight (g)</label>
-              <input type="number" {...register('weight_grams', { valueAsNumber: true })} className="w-full mt-1 border border-slate-300 rounded-lg p-2 text-sm" placeholder="e.g. 150" />
+              <label className="block text-sm font-medium text-slate-700">Current Weight</label>
+              <div className="mt-1 flex rounded-md shadow-sm">
+                <input type="number" step="0.1" {...register('weight', { valueAsNumber: true })} className="form-input flex-1 block w-full rounded-none rounded-l-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white" placeholder="e.g. 150" />
+                <select {...register('weight_unit')} className="form-select inline-flex items-center rounded-none rounded-r-md border border-l-0 border-gray-300 bg-gray-50 px-3 text-gray-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300 focus:border-indigo-500 focus:ring-indigo-500">
+                  <option value="g">g</option>
+                  <option value="kg">kg</option>
+                  <option value="oz">oz</option>
+                  <option value="lbs">lbs</option>
+                </select>
+              </div>
             </div>
           </div>
 

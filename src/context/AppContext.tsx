@@ -20,7 +20,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     },
     eventTypes: ['Training', 'Public Display', 'Medical Treatment', 'Cleaning', 'Moulting'],
     activeShift: activeShift || null,
-    clockIn: async (initials: string) => await clockIn(currentUser?.name || 'Unknown'),
+    clockIn: async () => await clockIn(currentUser?.name || 'Unknown'),
     clockOut: async () => {
       if (activeShift) await clockOut(activeShift.id);
     },

@@ -5,7 +5,7 @@ import {
   AlertTriangle, Plus, Archive, Skull, 
   Truck, Loader2, Info, Calendar, MapPin, ShieldCheck,
   History, Heart, Layers, Thermometer, Droplets,
-  CheckCircle2, Clock, User, Fingerprint, ClipboardCheck
+  CheckCircle2, Clock, User, Fingerprint, ClipboardCheck, FileText
 } from 'lucide-react';
 import { formatWeightDisplay } from '../../services/weightUtils';
 import AddEntryModal from './AddEntryModal';
@@ -15,6 +15,7 @@ import AnimalFormModal from './AnimalFormModal';
 import { IUCNBadge } from './IUCNBadge';
 import { useAnimalProfileData } from './useAnimalProfileData';
 import { DEFAULT_FOOD_OPTIONS, DEFAULT_FEED_METHODS, DEFAULT_EVENT_TYPES } from '../../constants';
+import { generateBirthCertificateDocx } from '../reports/utils/docxExportService';
 
 interface AnimalProfileProps {
   animalId: string;
@@ -67,6 +68,28 @@ const AnimalProfile: React.FC<AnimalProfileProps> = ({ animalId, onBack }) => {
       onBack();
     } catch (err) {
       console.error("Failed to archive animal:", err);
+    }
+  };
+
+  const handleGenerateBirthCertificate = async () => {
+    if (!animal) return;
+    try {
+      const blob = await generateBirthCertificateDocx(animal, {
+        reportName: 'Birth Certificate',
+        startDate: new Date().toISOString().split('T')[0],
+        endDate: new Date().toISOString().split('T')[0],
+        generatedBy: 'STAFF'
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${animal.name}_Birth_Certificate.docx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Failed to generate birth certificate:", err);
     }
   };
 
@@ -123,6 +146,11 @@ const AnimalProfile: React.FC<AnimalProfileProps> = ({ animalId, onBack }) => {
                 </div>
 
                 <div className="flex items-center gap-2 w-full md:w-auto">
+                    {animal.acquisition_type === 'BORN' && (
+                        <button onClick={handleGenerateBirthCertificate} className="px-4 py-2 bg-white text-slate-700 border border-slate-300 rounded-md hover:bg-slate-50 text-sm font-medium transition-colors" title="Birth Certificate">
+                            <FileText size={18} />
+                        </button>
+                    )}
                     <button onClick={() => setIsSignGeneratorOpen(true)} className="px-4 py-2 bg-white text-slate-700 border border-slate-300 rounded-md hover:bg-slate-50 text-sm font-medium transition-colors" title="Signage">
                         <Printer size={18} />
                     </button>
@@ -211,7 +239,7 @@ const AnimalProfile: React.FC<AnimalProfileProps> = ({ animalId, onBack }) => {
                             </div>
                             <div>
                                 <h3 className="text-2xl font-bold text-slate-900 mb-1">
-                                    {latestWeight?.weight_grams ? formatWeightDisplay(latestWeight.weight_grams, animal.weight_unit) : String(latestWeight?.value || 'N/A')}
+                                    {latestWeight?.weight ? `${latestWeight.weight}${latestWeight.weight_unit || 'g'}` : latestWeight?.weight_grams ? formatWeightDisplay(latestWeight.weight_grams, animal.weight_unit) : String(latestWeight?.value || 'N/A')}
                                 </h3>
                                 <p className="text-sm font-medium text-slate-500">
                                     {latestWeight ? `Last recorded ${new Date(latestWeight.log_date).toLocaleDateString()}` : 'No records found'}
@@ -396,7 +424,7 @@ const AnimalProfile: React.FC<AnimalProfileProps> = ({ animalId, onBack }) => {
                                                         </span>
                                                     </td>
                                                     <td className="px-6 py-4 text-sm font-semibold text-slate-900">
-                                                        {log.log_type === LogType.WEIGHT && log.weight_grams ? formatWeightDisplay(log.weight_grams, animal.weight_unit) : String(log.value)}
+                                                        {log.log_type === LogType.WEIGHT ? (log.weight ? `${log.weight}${log.weight_unit || 'g'}` : log.weight_grams ? formatWeightDisplay(log.weight_grams, animal.weight_unit) : String(log.value)) : String(log.value)}
                                                     </td>
                                                     <td className="px-6 py-4 text-sm text-slate-600 italic">{String(log.notes || '-')}</td>
                                                     <td className="px-6 py-4 text-right text-sm font-medium text-slate-500">{String(log.user_initials)}</td>

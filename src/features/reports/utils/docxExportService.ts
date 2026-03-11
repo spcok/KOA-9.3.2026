@@ -13,7 +13,7 @@ import {
   ImageRun,
   BorderStyle
 } from 'docx';
-import { Animal, LogEntry, LogType } from '../../../types';
+import { Animal, LogEntry, LogType, InternalMovement, ExternalTransfer } from '../../../types';
 
 interface ReportConfig {
   logoUrl?: string;
@@ -23,20 +23,27 @@ interface ReportConfig {
   generatedBy: string;
 }
 
-const getLogoBuffer = async (url?: string): Promise<ArrayBuffer | null> => {
-  if (!url || url.trim() === '' || url.startsWith('data:')) return null; // Reject old Base64 strings safely
+const getLocalLogo = async (): Promise<{ buffer: ArrayBuffer, extension: "jpg" | "png" } | null> => {
   try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error("Failed to fetch logo from koa-attachments bucket");
-    return await response.arrayBuffer();
+    // Determine your exact filename here (update to .png if necessary)
+    const logoPath = '/koa-logo.jpg'; 
+    const extension = logoPath.endsWith('.jpg') ? 'jpg' : 'png';
+
+    // Fetch using a relative path from the app's own public folder
+    const response = await fetch(logoPath);
+    if (!response.ok) throw new Error("Local logo file not found");
+    
+    const buffer = await response.arrayBuffer();
+    return { buffer, extension };
   } catch (e) {
-    console.warn("Could not load logo for report (user may be offline):", e);
+    console.warn("Could not load local logo:", e);
     return null;
   }
 };
 
 const createDocumentHeader = async (config?: ReportConfig): Promise<Table> => {
-  const logoBuffer = await getLogoBuffer(config?.logoUrl);
+  // Completely ignore any logo URL passed from the database config
+  const logoData = await getLocalLogo();
 
   return new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
@@ -53,13 +60,13 @@ const createDocumentHeader = async (config?: ReportConfig): Promise<Table> => {
         children: [
           new TableCell({
             width: { size: 30, type: WidthType.PERCENTAGE },
-            children: logoBuffer ? [
+            children: logoData ? [
               new Paragraph({
                 children: [
                   new ImageRun({
-                    data: logoBuffer,
-                    transformation: { width: 150, height: 80 },
-                    type: 'png',
+                    data: logoData.buffer,
+                    transformation: { width: 200, height: 120 },
+                    type: logoData.extension,
                   }),
                 ],
               }),
@@ -68,16 +75,403 @@ const createDocumentHeader = async (config?: ReportConfig): Promise<Table> => {
           new TableCell({
             width: { size: 70, type: WidthType.PERCENTAGE },
             children: [
-              new Paragraph({ children: [new TextRun({ text: config?.reportName || '', bold: true, size: 28 })], alignment: AlignmentType.RIGHT }),
-              new Paragraph({ children: [new TextRun({ text: `Date: ${config?.startDate === config?.endDate ? config.startDate : config?.startDate + ' to ' + config?.endDate}`, size: 20, color: "666666" })], alignment: AlignmentType.RIGHT }),
-              new Paragraph({ children: [new TextRun({ text: `Generated: ${new Date().toLocaleDateString()}`, size: 20, color: "666666" })], alignment: AlignmentType.RIGHT }),
-              new Paragraph({ children: [new TextRun({ text: `Initials: ${config?.generatedBy || ''}`, size: 20, color: "666666" })], alignment: AlignmentType.RIGHT }),
+              new Paragraph({ text: "" }),
+              new Paragraph({ children: [new TextRun({ text: config?.reportName || '', bold: true, size: 38 })], alignment: AlignmentType.RIGHT }),
+              new Paragraph({ children: [new TextRun({ text: `Date: ${config?.startDate === config?.endDate ? config.startDate : config?.startDate + ' to ' + config?.endDate}`, size: 26, color: "666666" })], alignment: AlignmentType.RIGHT }),
+              new Paragraph({ children: [new TextRun({ text: `Generated: ${new Date().toLocaleDateString()}`, size: 26, color: "666666" })], alignment: AlignmentType.RIGHT }),
+              new Paragraph({ children: [new TextRun({ text: `Initials: ${config?.generatedBy || ''}`, size: 26, color: "666666" })], alignment: AlignmentType.RIGHT }),
             ],
           }),
         ],
       }),
     ],
   });
+};
+
+export const generateSection9Docx = async (
+  tableData: string[][],
+  config?: ReportConfig,
+  orientation: 'portrait' | 'landscape' = 'landscape'
+): Promise<Blob> => {
+  const headerTable = await createDocumentHeader(config);
+
+  const tableRows = tableData.map(row => {
+    return new TableRow({
+      children: row.map(cell => new TableCell({
+        children: [new Paragraph({ children: [new TextRun({ text: cell, size: 22 })] })],
+        margins: { top: 100, bottom: 100, left: 100, right: 100 },
+      })),
+    });
+  });
+
+  const table = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    borders: {
+      top: { style: BorderStyle.SINGLE, size: 1, color: "E2E8F0" },
+      bottom: { style: BorderStyle.SINGLE, size: 1, color: "E2E8F0" },
+      left: { style: BorderStyle.SINGLE, size: 1, color: "E2E8F0" },
+      right: { style: BorderStyle.SINGLE, size: 1, color: "E2E8F0" },
+      insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: "F1F5F9" },
+      insideVertical: { style: BorderStyle.SINGLE, size: 1, color: "F1F5F9" },
+    },
+    rows: [
+      new TableRow({
+        tableHeader: true,
+        children: ["Species", "Start Count", "Births", "Arrivals", "Deaths", "Departures", "End Count"].map(header => 
+          new TableCell({
+            children: [new Paragraph({ children: [new TextRun({ text: header, bold: true, size: 24, color: "475569" })] })],
+            shading: { fill: "F8FAFC" },
+            margins: { top: 150, bottom: 150, left: 100, right: 100 },
+          })
+        ),
+      }),
+      ...tableRows
+    ],
+  });
+
+  const doc = new Document({
+    sections: [{
+      properties: {
+        page: {
+          size: {
+            orientation: orientation === 'landscape' ? PageOrientation.LANDSCAPE : PageOrientation.PORTRAIT,
+          },
+          margin: { top: 720, right: 720, bottom: 720, left: 720 },
+        },
+      },
+      children: [
+        headerTable,
+        new Paragraph({ text: "", spacing: { after: 400 } }),
+        table
+      ],
+    }],
+  });
+
+  return await Packer.toBlob(doc);
+};
+
+export const generateBirthCertificateDocx = async (
+  animal: Animal,
+  config?: ReportConfig
+): Promise<Blob> => {
+  const headerTable = await createDocumentHeader(config);
+
+  const doc = new Document({
+    sections: [{
+      properties: {
+        page: {
+          size: {
+            orientation: PageOrientation.PORTRAIT,
+          },
+          margin: { top: 720, right: 720, bottom: 720, left: 720 },
+        },
+      },
+      children: [
+        headerTable,
+        new Paragraph({ text: "", spacing: { after: 800 } }),
+        new Paragraph({
+          children: [new TextRun({ text: "Birth Certificate", bold: true, size: 48 })],
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 800 }
+        }),
+        new Paragraph({
+          children: [new TextRun({ text: `Name: `, bold: true, size: 28 }), new TextRun({ text: animal.name || '--', size: 28 })],
+          spacing: { after: 400 }
+        }),
+        new Paragraph({
+          children: [new TextRun({ text: `Species: `, bold: true, size: 28 }), new TextRun({ text: animal.species || '--', size: 28 })],
+          spacing: { after: 400 }
+        }),
+        new Paragraph({
+          children: [new TextRun({ text: `Date of Birth: `, bold: true, size: 28 }), new TextRun({ text: animal.dob ? new Date(animal.dob).toLocaleDateString() : '--', size: 28 })],
+          spacing: { after: 400 }
+        }),
+        new Paragraph({
+          children: [new TextRun({ text: `Sex: `, bold: true, size: 28 }), new TextRun({ text: animal.sex || '--', size: 28 })],
+          spacing: { after: 400 }
+        }),
+        new Paragraph({
+          children: [new TextRun({ text: `Sire: `, bold: true, size: 28 }), new TextRun({ text: animal.sire_id || '--', size: 28 })],
+          spacing: { after: 400 }
+        }),
+        new Paragraph({
+          children: [new TextRun({ text: `Dam: `, bold: true, size: 28 }), new TextRun({ text: animal.dam_id || '--', size: 28 })],
+          spacing: { after: 400 }
+        }),
+      ],
+    }],
+  });
+
+  return await Packer.toBlob(doc);
+};
+export const generateInternalMovementsDocx = async (
+  movements: InternalMovement[],
+  animals: Animal[],
+  config?: ReportConfig
+): Promise<Blob> => {
+  const headerTable = await createDocumentHeader(config);
+
+  const tableRows = movements.map(movement => {
+    const animal = animals.find(a => a.id === movement.animal_id);
+    return new TableRow({
+      children: [
+        new TableCell({ children: [new Paragraph(movement.log_date)] }),
+        new TableCell({ children: [new Paragraph(animal?.name || movement.animal_name || '--')] }),
+        new TableCell({ children: [new Paragraph(animal?.species || '--')] }),
+        new TableCell({ children: [new Paragraph(movement.source_location || '--')] }),
+        new TableCell({ children: [new Paragraph(movement.destination_location || '--')] }),
+        new TableCell({ children: [new Paragraph(movement.notes || '--')] }),
+        new TableCell({ children: [new Paragraph(movement.created_by || '--')] }),
+      ],
+    });
+  });
+
+  const table = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    columnWidths: [1500, 2000, 2000, 2000, 2000, 3000, 1000],
+    rows: [
+      new TableRow({
+        tableHeader: true,
+        children: ["Date", "Animal", "Species", "From", "To", "Reason/Notes", "Initials"].map(header => 
+          new TableCell({
+            shading: { fill: "F3F4F6" },
+            children: [new Paragraph({ children: [new TextRun({ text: header, bold: true })], alignment: AlignmentType.CENTER })],
+          })
+        ),
+      }),
+      ...tableRows
+    ],
+  });
+
+  const doc = new Document({ 
+    styles: {
+      default: {
+        document: {
+          run: {
+            font: "Arial",
+            size: 24,
+          },
+        },
+      },
+    },
+    sections: [{
+      properties: {
+        page: {
+          size: {
+            orientation: PageOrientation.LANDSCAPE,
+          },
+        },
+      },
+      headers: {
+        default: new Header({
+          children: [headerTable]
+        })
+      },
+      children: [
+        new Paragraph({ text: "", spacing: { after: 400 } }),
+        table
+      ]
+    }]
+  });
+  return await Packer.toBlob(doc);
+};
+
+export const generateExternalTransfersDocx = async (
+  transfers: ExternalTransfer[],
+  animals: Animal[],
+  config?: ReportConfig
+): Promise<Blob> => {
+  const headerTable = await createDocumentHeader(config);
+
+  const tableRows = transfers.map(transfer => {
+    const animal = animals.find(a => a.id === transfer.animal_id);
+    return new TableRow({
+      children: [
+        new TableCell({ children: [new Paragraph(transfer.date)] }),
+        new TableCell({ children: [new Paragraph(animal?.name || transfer.animal_name || '--')] }),
+        new TableCell({ children: [new Paragraph(animal?.species || '--')] }),
+        new TableCell({ children: [new Paragraph(transfer.transfer_type || '--')] }),
+        new TableCell({ children: [new Paragraph(transfer.institution || '--')] }),
+        new TableCell({ children: [new Paragraph(transfer.notes || '--')] }),
+        new TableCell({ children: [new Paragraph('--')] }), // Initials not explicitly in ExternalTransfer, using placeholder
+      ],
+    });
+  });
+
+  const table = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    columnWidths: [1500, 2000, 2000, 2000, 3000, 3000, 1000],
+    rows: [
+      new TableRow({
+        tableHeader: true,
+        children: ["Date", "Animal", "Species", "Transfer Type", "Origin / Destination", "Notes", "Initials"].map(header => 
+          new TableCell({
+            shading: { fill: "F3F4F6" },
+            children: [new Paragraph({ children: [new TextRun({ text: header, bold: true })], alignment: AlignmentType.CENTER })],
+          })
+        ),
+      }),
+      ...tableRows
+    ],
+  });
+
+  const doc = new Document({ 
+    styles: {
+      default: {
+        document: {
+          run: {
+            font: "Arial",
+            size: 24,
+          },
+        },
+      },
+    },
+    sections: [{
+      properties: {
+        page: {
+          size: {
+            orientation: PageOrientation.LANDSCAPE,
+          },
+        },
+      },
+      headers: {
+        default: new Header({
+          children: [headerTable]
+        })
+      },
+      children: [
+        new Paragraph({ text: "", spacing: { after: 400 } }),
+        table
+      ]
+    }]
+  });
+  return await Packer.toBlob(doc);
+};
+
+export const generateSiteMaintenanceDocx = async (
+  data: string[][],
+  config: ReportConfig,
+  orientation: 'portrait' | 'landscape'
+): Promise<Blob> => {
+  const headerTable = await createDocumentHeader(config);
+
+  const tableRows = data.map(row => {
+    return new TableRow({
+      children: row.map(cell => new TableCell({ children: [new Paragraph(cell)] })),
+    });
+  });
+
+  const table = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    columnWidths: [1500, 2500, 4000, 1500, 1500, 2000],
+    rows: [
+      new TableRow({
+        tableHeader: true,
+        children: ["Date", "Task / Title", "Description", "Priority", "Status", "Assigned / Initials"].map(header => 
+          new TableCell({
+            shading: { fill: "F3F4F6" },
+            children: [new Paragraph({ children: [new TextRun({ text: header, bold: true })], alignment: AlignmentType.CENTER })],
+          })
+        ),
+      }),
+      ...tableRows
+    ],
+  });
+
+  const doc = new Document({ 
+    styles: {
+      default: {
+        document: {
+          run: {
+            font: "Arial",
+            size: 24,
+          },
+        },
+      },
+    },
+    sections: [{
+      properties: {
+        page: {
+          size: {
+            orientation: orientation === 'landscape' ? PageOrientation.LANDSCAPE : PageOrientation.PORTRAIT,
+          },
+        },
+      },
+      headers: {
+        default: new Header({
+          children: [headerTable]
+        })
+      },
+      children: [
+        new Paragraph({ text: "", spacing: { after: 400 } }),
+        table
+      ]
+    }]
+  });
+  return await Packer.toBlob(doc);
+};
+
+export const generateAnimalCensusDocx = async (
+  data: string[][],
+  config: ReportConfig,
+  orientation: 'portrait' | 'landscape'
+): Promise<Blob> => {
+  const headerTable = await createDocumentHeader(config);
+
+  const tableRows = data.map(row => {
+    return new TableRow({
+      children: row.map(cell => new TableCell({ children: [new Paragraph(cell)] })),
+    });
+  });
+
+  const table = new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    columnWidths: [2000, 2000, 2500, 1000, 2000, 2000, 1500],
+    rows: [
+      new TableRow({
+        tableHeader: true,
+        children: ["Name", "Species", "Latin Name", "Sex", "Ring / ID #", "Enclosure", "Status"].map(header => 
+          new TableCell({
+            shading: { fill: "F3F4F6" },
+            children: [new Paragraph({ children: [new TextRun({ text: header, bold: true })], alignment: AlignmentType.CENTER })],
+          })
+        ),
+      }),
+      ...tableRows
+    ],
+  });
+
+  const doc = new Document({ 
+    styles: {
+      default: {
+        document: {
+          run: {
+            font: "Arial",
+            size: 24,
+          },
+        },
+      },
+    },
+    sections: [{
+      properties: {
+        page: {
+          size: {
+            orientation: orientation === 'landscape' ? PageOrientation.LANDSCAPE : PageOrientation.PORTRAIT,
+          },
+        },
+      },
+      headers: {
+        default: new Header({
+          children: [headerTable]
+        })
+      },
+      children: [
+        new Paragraph({ text: "", spacing: { after: 400 } }),
+        table
+      ]
+    }]
+  });
+  return await Packer.toBlob(doc);
 };
 
 export const generateDailyLogDocx = async (
@@ -172,10 +566,6 @@ export const generateDailyLogDocx = async (
       },
       children: [
         new Paragraph({ text: "", spacing: { after: 400 } }),
-        new Paragraph({
-          text: date,
-          heading: "Heading2",
-        }),
         table
       ]
     };

@@ -60,7 +60,8 @@ export enum LogType {
   HEALTH = 'HEALTH',
   EVENT = 'EVENT',
   MISTING = 'MISTING',
-  WATER = 'WATER'
+  WATER = 'WATER',
+  BIRTH = 'BIRTH'
 }
 
 export enum MovementType {
@@ -140,6 +141,8 @@ export interface Animal {
   is_quarantine?: boolean;
   distribution_map_url?: string;
   water_tipping_temp?: number;
+  group_name?: string;
+  acquisition_type?: 'BORN' | 'TRANSFERRED_IN' | 'RESCUE' | 'UNKNOWN';
 }
 
 export interface LogEntry {
@@ -154,6 +157,8 @@ export interface LogEntry {
   notes?: string;
   user_initials?: string;
   weight_grams?: number;
+  weight?: number;
+  weight_unit?: 'g' | 'kg' | 'oz' | 'lbs' | 'lbs_oz';
   health_record_type?: string;
   // Temperature fields
   basking_temp_c?: number;
@@ -307,6 +312,8 @@ export interface ClinicalNote {
   diagnosis?: string;
   bcs?: number;
   weight_grams?: number;
+  weight?: number;
+  weight_unit?: 'g' | 'kg' | 'oz' | 'lbs' | 'lbs_oz';
   treatment_plan?: string;
 }
 

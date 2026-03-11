@@ -17,7 +17,7 @@ import { renderAsync } from 'docx-preview';
 import { db } from '../../lib/db';
 import { useHybridQuery } from '../../lib/dataEngine';
 import { Animal } from '../../types';
-import { generateDailyLogDocx } from './utils/docxExportService';
+import { generateDailyLogDocx, generateInternalMovementsDocx, generateExternalTransfersDocx, generateSiteMaintenanceDocx, generateAnimalCensusDocx, generateSection9Docx } from './utils/docxExportService';
 import { useAuthStore } from '../../store/authStore';
 
 interface ReportDefinition {
@@ -27,6 +27,7 @@ interface ReportDefinition {
   icon: React.ElementType;
   exportFn: () => Promise<boolean>;
   columns: string[];
+  category?: string;
 }
 
 const REPORTS: ReportDefinition[] = [
@@ -39,20 +40,31 @@ const REPORTS: ReportDefinition[] = [
     columns: ['Date', 'Animal ID', 'Log Type', 'Notes', 'Recorded By']
   },
   {
-    id: 'disposition',
-    title: 'Disposition Ledger',
-    description: 'Track animal arrivals, departures, and status changes.',
+    id: 'internal_movements',
+    title: 'Internal Movements Ledger',
+    description: 'Log of all internal enclosure changes',
+    category: 'facility',
     icon: ArrowRightLeft,
     exportFn: async () => { return true; },
-    columns: ['Date', 'Animal', 'Microchip', 'Status', 'Origin/Dest']
+    columns: ['Date', 'Animal', 'Species', 'From', 'To', 'Reason/Notes', 'Initials']
   },
   {
-    id: 'maintenance',
-    title: 'Facility Maintenance',
-    description: 'UV bulb tracking and pending work orders.',
+    id: 'external_transfers',
+    title: 'External Transfers Ledger',
+    description: 'Log of all acquisitions, loans, transfers, and deaths',
+    category: 'facility',
+    icon: ArrowRightLeft,
+    exportFn: async () => { return true; },
+    columns: ['Date', 'Animal', 'Species', 'Transfer Type', 'Origin / Destination', 'Notes', 'Initials']
+  },
+  {
+    id: 'site_maintenance',
+    title: 'Site Maintenance Ledger',
+    description: 'Log of all site maintenance tasks, repairs, and statuses',
+    category: 'facility',
     icon: Wrench,
     exportFn: async () => { return true; },
-    columns: ['Enclosure', 'Task', 'Status', 'Date']
+    columns: ['Date', 'Task / Title', 'Description', 'Priority', 'Status', 'Assigned / Initials']
   },
   {
     id: 'census',
@@ -65,10 +77,10 @@ const REPORTS: ReportDefinition[] = [
   {
     id: 'stocklist',
     title: 'Stock List (Section 9)',
-    description: 'Acquisition, disposition, and internal transfer records.',
+    description: 'Statutory stocklist showing population changes over time.',
     icon: ArrowRightLeft,
     exportFn: async () => { return true; },
-    columns: ['Date', 'Animal', 'Type', 'Source', 'Destination', 'Notes']
+    columns: ['Species', 'Start Count', 'Births', 'Arrivals', 'Deaths', 'Departures', 'End Count']
   },
   {
     id: 'rounds',
@@ -100,11 +112,15 @@ export default function ReportsDashboard() {
   const [activeReportId, setActiveReportId] = useState('husbandry');
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
-  const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [selectedSection, setSelectedSection] = useState<string>('');
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('landscape');
   
   const animals = useHybridQuery<Animal[]>('animals', () => db.animals.toArray(), []);
   const { currentUser } = useAuthStore();
+
+  const uniqueSections = Array.from(
+    new Set((animals || []).map(a => (a as unknown as Record<string, string>).section || a.category).filter(Boolean))
+  ).sort();
 
   // Preview State
   const [previewBlob, setPreviewBlob] = useState<Blob | null>(null);
@@ -121,6 +137,11 @@ export default function ReportsDashboard() {
     setError(null);
 
     try {
+      const animalSectionMap = new Map(
+        (animals || []).map(a => [a.id, (a as unknown as Record<string, string>).section || a.category])
+      );
+      const dynamicTitle = selectedSection ? `${activeReport.title} - ${selectedSection}` : activeReport.title;
+
       if (activeReportId === 'husbandry') {
         const dates = [];
         const currentDate = new Date(startDate);
@@ -130,20 +151,25 @@ export default function ReportsDashboard() {
           currentDate.setDate(currentDate.getDate() + 1);
         }
 
-        const logs = await db.daily_logs
+        const rawLogs = await db.daily_logs
           .where('log_date')
           .between(startDate, endDate, true, true)
           .toArray();
+
+        const logs = rawLogs.filter(log => {
+          if (!selectedSection) return true;
+          return animalSectionMap.get(log.animal_id) === selectedSection;
+        });
 
         const blob = await generateDailyLogDocx(
           animals || [], 
           logs, 
           startDate, 
           endDate, 
-          selectedCategory, 
+          selectedSection || 'ALL', 
           orientation,
           {
-            reportName: activeReport.title,
+            reportName: dynamicTitle,
             startDate,
             endDate,
             generatedBy: currentUser?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'STAFF'
@@ -157,6 +183,230 @@ export default function ReportsDashboard() {
             inWrapper: true,
           });
         }
+        return;
+      } else if (activeReportId === 'internal_movements') {
+        const rawData = await db.internal_movements
+          .where('log_date')
+          .between(startDate, endDate, true, true)
+          .toArray();
+          
+        const filteredMovements = rawData.filter(m => {
+          if (!selectedSection) return true;
+          return animalSectionMap.get(m.animal_id) === selectedSection;
+        });
+        
+        const sortedData = [...filteredMovements].sort((a, b) => new Date(a.log_date).getTime() - new Date(b.log_date).getTime());
+        
+        const blob = await generateInternalMovementsDocx(
+          sortedData,
+          animals || [],
+          {
+            reportName: dynamicTitle,
+            startDate,
+            endDate,
+            generatedBy: currentUser?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'STAFF'
+          }
+        );
+        setPreviewBlob(blob);
+        
+        if (previewContainerRef.current) {
+          await renderAsync(blob, previewContainerRef.current, undefined, {
+            className: 'docx-preview-page',
+            inWrapper: true,
+          });
+        }
+        return;
+      } else if (activeReportId === 'external_transfers') {
+        const rawData = await db.external_transfers
+          .where('date')
+          .between(startDate, endDate, true, true)
+          .toArray();
+          
+        const filteredTransfers = rawData.filter(m => {
+          if (!selectedSection) return true;
+          return animalSectionMap.get(m.animal_id) === selectedSection;
+        });
+        
+        const sortedData = [...filteredTransfers].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        
+        const blob = await generateExternalTransfersDocx(
+          sortedData,
+          animals || [],
+          {
+            reportName: dynamicTitle,
+            startDate,
+            endDate,
+            generatedBy: currentUser?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'STAFF'
+          }
+        );
+        setPreviewBlob(blob);
+        
+        if (previewContainerRef.current) {
+          await renderAsync(blob, previewContainerRef.current, undefined, {
+            className: 'docx-preview-page',
+            inWrapper: true,
+          });
+        }
+        return;
+      } else if (activeReportId === 'site_maintenance') {
+        const rawData = await db.maintenance_logs
+          .where('date_logged')
+          .between(startDate, endDate, true, true)
+          .toArray();
+        const sortedData = [...rawData].sort((a, b) => new Date(a.date_logged).getTime() - new Date(b.date_logged).getTime());
+        
+        const tableData = sortedData.map(log => {
+          const l = log as unknown as Record<string, string>;
+          return [
+            new Date(log.date_logged).toLocaleDateString(),
+            log.task_type || '--',
+            log.description || '--',
+            l.priority || '--',
+            log.status || '--',
+            l.assigned_to || l.user_initials || '--'
+          ];
+        });
+
+        const blob = await generateSiteMaintenanceDocx(
+          tableData,
+          {
+            reportName: activeReport.title,
+            startDate,
+            endDate,
+            generatedBy: currentUser?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'STAFF'
+          },
+          orientation
+        );
+        setPreviewBlob(blob);
+        
+        if (previewContainerRef.current) {
+          await renderAsync(blob, previewContainerRef.current, undefined, {
+            className: 'docx-preview-page',
+            inWrapper: true,
+          });
+        }
+        return;
+      } else if (activeReportId === 'census') {
+        const activeAnimals = (animals || []).filter(a => {
+          const isActive = a.disposition_status !== 'Deceased' && 
+                           a.disposition_status !== 'Transferred' && 
+                           !a.archived;
+          const matchesSection = selectedSection ? ((a as unknown as Record<string, string>).section === selectedSection || a.category === selectedSection) : true;
+          return isActive && matchesSection;
+        });
+
+        const tableData = activeAnimals.map(animal => [
+          animal.name || '--',
+          animal.species || '--',
+          animal.latin_name || '--',
+          animal.sex || '--',
+          animal.ring_number || (animal as unknown as Record<string, string>).id_number || '--',
+          animal.location || (animal as unknown as Record<string, string>).enclosure || '--',
+          animal.disposition_status || 'Active'
+        ]);
+
+        const blob = await generateAnimalCensusDocx(
+          tableData,
+          {
+            reportName: dynamicTitle,
+            startDate,
+            endDate,
+            generatedBy: currentUser?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'STAFF'
+          },
+          orientation
+        );
+        setPreviewBlob(blob);
+        
+        if (previewContainerRef.current) {
+          await renderAsync(blob, previewContainerRef.current, undefined, {
+            className: 'docx-preview-page',
+            inWrapper: true,
+          });
+        }
+        return;
+      } else if (activeReportId === 'stocklist') {
+        const speciesMap = new Map<string, {
+          startCount: number;
+          births: number;
+          arrivals: number;
+          deaths: number;
+          departures: number;
+          endCount: number;
+        }>();
+
+        const start = new Date(startDate).getTime();
+        const end = new Date(endDate).getTime();
+        // Add one day to end date to include the whole day
+        const endInclusive = end + 24 * 60 * 60 * 1000 - 1;
+
+        (animals || []).forEach(animal => {
+          if (selectedSection && animalSectionMap.get(animal.id) !== selectedSection) return;
+
+          const species = animal.species || 'Unknown Species';
+          if (!speciesMap.has(species)) {
+            speciesMap.set(species, { startCount: 0, births: 0, arrivals: 0, deaths: 0, departures: 0, endCount: 0 });
+          }
+          const stats = speciesMap.get(species)!;
+
+          const acqDate = animal.acquisition_date ? new Date(animal.acquisition_date).getTime() : 0;
+          const dispDate = animal.transfer_date ? new Date(animal.transfer_date).getTime() : Infinity;
+
+          if (acqDate < start && dispDate >= start) {
+            stats.startCount++;
+          }
+
+          if (acqDate >= start && acqDate <= endInclusive) {
+            if (animal.acquisition_type === 'BORN') {
+              stats.births++;
+            } else {
+              stats.arrivals++;
+            }
+          }
+
+          if (dispDate >= start && dispDate <= endInclusive) {
+            if (animal.disposition_status === 'Deceased') {
+              stats.deaths++;
+            } else {
+              stats.departures++;
+            }
+          }
+
+          if (acqDate <= endInclusive && dispDate > endInclusive) {
+            stats.endCount++;
+          }
+        });
+
+        const tableData = Array.from(speciesMap.entries())
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([species, stats]) => [
+            species,
+            stats.startCount.toString(),
+            stats.births.toString(),
+            stats.arrivals.toString(),
+            stats.deaths.toString(),
+            stats.departures.toString(),
+            stats.endCount.toString()
+          ]);
+
+        const blob = await generateSection9Docx(
+          tableData,
+          {
+            reportName: dynamicTitle,
+            startDate,
+            endDate,
+            generatedBy: currentUser?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'STAFF'
+          },
+          orientation
+        );
+        setPreviewBlob(blob);
+        
+        if (previewContainerRef.current) {
+          await renderAsync(blob, previewContainerRef.current, undefined, {
+            className: 'docx-preview-page',
+            inWrapper: true,
+          });
+        }
+        return;
       }
       // ... handle other reports ...
     } catch (err) {
@@ -263,20 +513,21 @@ export default function ReportsDashboard() {
               </select>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
-              <select 
-                value={selectedCategory} 
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="ALL">ALL</option>
-                <option value="OWLS">OWLS</option>
-                <option value="RAPTORS">RAPTORS</option>
-                <option value="MAMMALS">MAMMALS</option>
-                <option value="EXOTICS">EXOTICS</option>
-              </select>
-            </div>
+            {activeReport?.id !== 'site_maintenance' && uniqueSections.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Animal Section</label>
+                <select
+                  value={selectedSection}
+                  onChange={(e) => setSelectedSection(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Sections</option>
+                  {uniqueSections.map(section => (
+                    <option key={section as string} value={section as string}>{section as string}</option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <button
               onClick={generatePreview}

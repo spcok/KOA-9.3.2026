@@ -41,6 +41,8 @@ export const animalFormSchema = z.object({
   target_humidity_min_percent: z.number().optional(),
   target_humidity_max_percent: z.number().optional(),
   misting_frequency: z.string().optional(),
+  group_name: z.string().optional(),
+  acquisition_type: z.enum(['BORN', 'TRANSFERRED_IN', 'RESCUE', 'UNKNOWN']).optional(),
 });
 
 export type AnimalFormData = z.infer<typeof animalFormSchema>;
@@ -83,6 +85,8 @@ export function useAnimalForm({ initialData, onClose }: UseAnimalFormProps) {
       archived: initialData.archived || false,
       is_quarantine: initialData.is_quarantine || false,
       water_tipping_temp: initialData.water_tipping_temp,
+      group_name: initialData.group_name || '',
+      acquisition_type: initialData.acquisition_type || 'UNKNOWN',
     } : {
       name: '',
       species: '',
@@ -111,6 +115,8 @@ export function useAnimalForm({ initialData, onClose }: UseAnimalFormProps) {
       archived: false,
       is_quarantine: false,
       water_tipping_temp: undefined,
+      group_name: '',
+      acquisition_type: 'UNKNOWN',
     },
   });
 

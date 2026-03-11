@@ -43,23 +43,30 @@ const OrgProfile: React.FC = () => {
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setIsUploading(true);
-      const file = e.target.files[0];
       try {
-        const filePath = `logos/${Date.now()}-${file.name}`;
-        const { error: uploadError } = await supabase.storage
-          .from('koa-attachments')
-          .upload(filePath, file);
+        const file = e.target.files[0];
+        const fileExt = file.name.split('.').pop();
+        const filePath = `logos/primary-logo.${fileExt}`;
 
+        // 1. Clean out the old logos to prevent extension clutter (e.g., leaving an old .png when a .jpg is uploaded)
+        const { data: existingFiles } = await supabase.storage.from('koa-attachments').list('logos');
+        if (existingFiles && existingFiles.length > 0) {
+          const filesToRemove = existingFiles.map(f => `logos/${f.name}`);
+          await supabase.storage.from('koa-attachments').remove(filesToRemove);
+        }
+
+        // 2. Upload the new consistent file
+        const { error: uploadError } = await supabase.storage.from('koa-attachments').upload(filePath, file, { upsert: true });
         if (uploadError) throw uploadError;
 
-        const { data: { publicUrl } } = supabase.storage
-          .from('koa-attachments')
-          .getPublicUrl(filePath);
+        // 3. Get the URL and add a cache-buster so the UI updates immediately
+        const { data } = supabase.storage.from('koa-attachments').getPublicUrl(filePath);
+        const cacheBustedUrl = `${data.publicUrl}?t=${Date.now()}`;
 
-        setValue('logo_url', publicUrl, { shouldValidate: true, shouldDirty: true });
+        setValue('logo_url', cacheBustedUrl, { shouldValidate: true, shouldDirty: true });
       } catch (error) {
         console.error('Upload failed', error);
-        alert('Upload failed');
+        alert('Upload failed. Ensure you have network connectivity.');
       } finally {
         setIsUploading(false);
       }

@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { X, Save, Loader2 } from 'lucide-react';
 import { Animal, LogType, LogEntry, AnimalCategory } from '../../types';
 import { getMaidstoneDailyWeather } from '../../services/weatherService';
+import { mutateOnlineFirst } from '../../lib/dataEngine';
 
 interface AddEntryModalProps {
   isOpen: boolean;
@@ -57,11 +58,14 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
     }
     return 'N/A';
   });
-  const [weightGrams, setWeightGrams] = useState<number | ''>(existingLog?.weight_grams || '');
+  const [weight, setWeight] = useState<number | ''>(existingLog?.weight ?? existingLog?.weight_grams ?? '');
+  const [weightUnit, setWeightUnit] = useState<'g' | 'kg' | 'oz' | 'lbs' | 'lbs_oz'>(existingLog?.weight_unit || animal.weight_unit || 'g');
   const [baskingTemp, setBaskingTemp] = useState<number | ''>(existingLog?.basking_temp_c || '');
   const [coolTemp, setCoolTemp] = useState<number | ''>(existingLog?.cool_temp_c || '');
   const [temperature, setTemperature] = useState<number | ''>(existingLog?.temperature_c ?? defaultTemperature ?? '');
   const [healthRecordType, setHealthRecordType] = useState(existingLog?.health_record_type || '');
+  const [litterSize, setLitterSize] = useState<number | ''>('');
+  const [litterHealth, setLitterHealth] = useState<string>('Healthy');
   const [isWeatherLoading, setIsWeatherLoading] = useState(false);
 
   const handleFetchWeatherInsideModal = async () => {
@@ -80,7 +84,7 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const entry: Partial<LogEntry> = {
@@ -92,9 +96,16 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
       notes: logType === LogType.FEED ? JSON.stringify({ cast, feedTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), userNotes: notes }) : notes,
     };
 
-    if (logType === LogType.WEIGHT && weightGrams !== '') {
-      entry.weight_grams = Number(weightGrams);
-      entry.value = `${weightGrams}g`;
+    if (logType === LogType.WEIGHT && weight !== '') {
+      entry.weight = Number(weight);
+      entry.weight_unit = weightUnit;
+      // Keep weight_grams for backward compatibility if needed, or just use weight
+      if (weightUnit === 'g') entry.weight_grams = Number(weight);
+      else if (weightUnit === 'kg') entry.weight_grams = Number(weight) * 1000;
+      else if (weightUnit === 'oz') entry.weight_grams = Number(weight) * 28.3495;
+      else if (weightUnit === 'lbs') entry.weight_grams = Number(weight) * 453.592;
+      
+      entry.value = `${weight}${weightUnit}`;
     }
 
     if (logType === LogType.TEMPERATURE) {
@@ -116,6 +127,38 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
       entry.value = healthRecordType;
     }
 
+    if (logType === LogType.BIRTH) {
+      entry.value = `Litter Size: ${litterSize} (${litterHealth})`;
+      
+      if (!existingLog && typeof litterSize === 'number' && litterSize > 0) {
+        const pups = Array.from({ length: litterSize }).map((_, i) => {
+          return {
+            id: uuidv4(),
+            name: `Pup ${i + 1} (${animal.name})`,
+            species: animal.species,
+            category: animal.category,
+            dob: date,
+            is_dob_unknown: false,
+            sex: 'Unknown',
+            location: animal.location,
+            acquisition_date: date,
+            acquisition_type: 'BORN',
+            origin: 'Captive Bred',
+            dam_id: animal.sex === 'Female' ? animal.id : undefined,
+            sire_id: animal.sex === 'Male' ? animal.id : undefined,
+            group_name: animal.group_name || animal.name,
+            archived: false,
+            is_quarantine: false,
+            display_order: 0,
+          } as Animal;
+        });
+        
+        for (const pup of pups) {
+          await mutateOnlineFirst('animals', pup, 'upsert');
+        }
+      }
+    }
+
     onSave(entry);
   };
 
@@ -124,14 +167,28 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
       case LogType.WEIGHT:
         return (
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Weight (grams)</label>
-            <input 
-              type="number" 
-              value={weightGrams} 
-              onChange={e => setWeightGrams(e.target.value ? Number(e.target.value) : '')}
-              className="w-full p-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-0 transition-all font-bold"
-              required
-            />
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Weight</label>
+            <div className="mt-1 flex rounded-md shadow-sm">
+              <input
+                type="number"
+                step="0.1"
+                value={weight}
+                onChange={e => setWeight(e.target.value ? Number(e.target.value) : '')}
+                className="form-input flex-1 block w-full rounded-none rounded-l-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                placeholder="Enter weight..."
+                required
+              />
+              <select
+                value={weightUnit}
+                onChange={e => setWeightUnit(e.target.value as any)}
+                className="form-select inline-flex items-center rounded-none rounded-r-md border border-l-0 border-gray-300 bg-gray-50 px-3 text-gray-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
+              >
+                <option value="g">g</option>
+                <option value="kg">kg</option>
+                <option value="oz">oz</option>
+                <option value="lbs">lbs</option>
+              </select>
+            </div>
           </div>
         );
       case LogType.FEED:
@@ -286,6 +343,34 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
                 placeholder="e.g. Medication, Vet Visit, Observation"
                 required
               />
+            </div>
+          </div>
+        );
+      case LogType.BIRTH:
+        return (
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Litter Size</label>
+              <input 
+                type="number" 
+                value={litterSize} 
+                onChange={e => setLitterSize(e.target.value ? Number(e.target.value) : '')}
+                className="w-full p-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-0 transition-all font-bold"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Health</label>
+              <select 
+                value={litterHealth} 
+                onChange={e => setLitterHealth(e.target.value)}
+                className="w-full p-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-0 transition-all font-bold"
+                required
+              >
+                <option value="Healthy">Healthy</option>
+                <option value="Complications">Complications</option>
+                <option value="Stillborn">Stillborn</option>
+              </select>
             </div>
           </div>
         );

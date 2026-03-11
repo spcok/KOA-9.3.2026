@@ -69,7 +69,7 @@ const MedicalRecords: React.FC = () => {
             <p><span class="label">Staff:</span> ${note.staff_initials}</p>
             ${note.diagnosis ? `<p><span class="label">Diagnosis:</span> ${note.diagnosis}</p>` : ''}
             ${note.bcs ? `<p><span class="label">BCS:</span> ${note.bcs}/5</p>` : ''}
-            ${note.weight_grams ? `<p><span class="label">Weight:</span> ${note.weight_grams}g</p>` : ''}
+            ${note.weight ? `<p><span class="label">Weight:</span> ${note.weight}${note.weight_unit || 'g'}</p>` : note.weight_grams ? `<p><span class="label">Weight:</span> ${note.weight_grams}g</p>` : ''}
             
             <div class="section">
               <h3>Clinical Observation</h3>
@@ -243,11 +243,15 @@ const MedicalRecords: React.FC = () => {
                         BCS: {selectedNote.bcs}/5
                       </span>
                     )}
-                    {selectedNote.weight_grams && (
+                    {selectedNote.weight ? (
+                      <span className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded-md text-xs font-medium">
+                        Weight: {selectedNote.weight}{selectedNote.weight_unit || 'g'}
+                      </span>
+                    ) : selectedNote.weight_grams ? (
                       <span className="bg-emerald-50 text-emerald-700 px-2 py-1 rounded-md text-xs font-medium">
                         Weight: {selectedNote.weight_grams}g
                       </span>
-                    )}
+                    ) : null}
                   </div>
 
                   {selectedNote.diagnosis && (

@@ -7,7 +7,7 @@ interface SignatureCaptureProps {
   initialSignature?: string;
 }
 
-export const SignatureCapture: React.FC<SignatureCaptureProps> = ({ onSave, onCancel, initialSignature }) => {
+export const SignatureCapture: React.FC<SignatureCaptureProps> = ({ onSave, onCancel }) => {
   const signatureRef = useRef<SignatureCanvas>(null);
 
   const handleSave = () => {

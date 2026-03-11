@@ -126,6 +126,10 @@ const AnimalFormModal: React.FC<AnimalFormModalProps> = ({ isOpen, onClose, init
                                     </datalist>
                                     {errors.location && <p className={errorClass}>{errors.location.message}</p>}
                                 </div>
+                                <div className="sm:col-span-12">
+                                    <label className={labelClass}>Group Name</label>
+                                    <input {...register('group_name')} className={inputClass} placeholder="e.g. The Mob" />
+                                </div>
                             </div>
 
                             {category === AnimalCategory.MAMMALS && (
@@ -196,11 +200,20 @@ const AnimalFormModal: React.FC<AnimalFormModalProps> = ({ isOpen, onClose, init
                                 <History size={16} /> Statutory Acquisition & Pedigree
                             </h3>
                             
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
                                 <div>
                                     <label className={labelClass}>Date of Arrival *</label>
                                     <input type="date" {...register('acquisition_date')} className={inputClass} />
                                     {errors.acquisition_date && <p className={errorClass}>{errors.acquisition_date.message}</p>}
+                                </div>
+                                <div>
+                                    <label className={labelClass}>Acquisition Type</label>
+                                    <select {...register('acquisition_type')} className={inputClass}>
+                                        <option value="UNKNOWN">Unknown</option>
+                                        <option value="BORN">Born</option>
+                                        <option value="TRANSFERRED_IN">Transferred In</option>
+                                        <option value="RESCUE">Rescue</option>
+                                    </select>
                                 </div>
                                 <div>
                                     <label className={labelClass}>Source / Origin *</label>

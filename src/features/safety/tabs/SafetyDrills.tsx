@@ -1,7 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { usePermissions } from '../../../hooks/usePermissions';
 import { useSafetyDrillData } from '../useSafetyDrillData';
-import { useAppData } from '../../../context/Context';
 import { useTimesheetData } from '../../staff/useTimesheetData';
 import { SafetyDrill } from '../../../types';
 import { ShieldAlert, Plus, Clock, Users, Timer, X, Trash2, UserCheck, Loader2, Search, Siren, Lock } from 'lucide-react';
@@ -17,8 +16,6 @@ const SafetyDrills: React.FC = () => {
     getCurrentlyClockedInStaff().then(setCurrentlyClockedIn);
   }, [getCurrentlyClockedInStaff]);
 
-  const { users } = useAppData(); // Assuming users are available in AppContext
-  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewingDrill, setViewingDrill] = useState<SafetyDrill | null>(null);
   
@@ -53,8 +50,8 @@ const SafetyDrills: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const verifiedNames = Object.entries(attendance).filter(([_, accounted]) => accounted).map(([name]) => name).join(', ');
-    const missingNames = Object.entries(attendance).filter(([_, accounted]) => !accounted).map(([name]) => name).join(', ');
+    const verifiedNames = Object.entries(attendance).filter(([, accounted]) => accounted).map(([name]) => name).join(', ');
+    const missingNames = Object.entries(attendance).filter(([, accounted]) => !accounted).map(([name]) => name).join(', ');
 
     await addDrillLog({
       date,
