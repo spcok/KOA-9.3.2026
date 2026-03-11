@@ -180,8 +180,8 @@ export const AddClinicalNoteModal: React.FC<Props> = ({ isOpen, onClose, onSave,
               <input type="date" {...register('recheck_date')} className="w-full mt-1 border border-slate-300 rounded-lg p-2 text-sm" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Staff Initials</label>
-              <input type="text" {...register('staff_initials')} className="w-full mt-1 border border-slate-300 rounded-lg p-2 text-sm" />
+              <label className="block text-sm font-medium text-slate-700">Staff Initials <span className="text-red-500">*</span></label>
+              <input type="text" {...register('staff_initials')} className="w-full mt-1 border border-slate-300 rounded-lg p-2 text-sm" required />
               {errors.staff_initials && <p className="text-red-500 text-xs mt-1">{errors.staff_initials.message}</p>}
             </div>
           </div>

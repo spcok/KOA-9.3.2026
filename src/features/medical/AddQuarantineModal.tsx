@@ -11,6 +11,7 @@ const schema = z.object({
   start_date: z.string().min(1, 'Start date is required'),
   end_date: z.string().min(1, 'Target release date is required'),
   isolation_notes: z.string().min(1, 'Notes are required'),
+  staff_initials: z.string().min(2, 'Initials are required'),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -79,6 +80,11 @@ export const AddQuarantineModal: React.FC<Props> = ({ isOpen, onClose, onSave, a
             <label className="block text-sm font-medium text-slate-700">Isolation Notes</label>
             <textarea {...register('isolation_notes')} className="w-full mt-1 border border-slate-300 rounded-lg p-2" rows={3} />
             {errors.isolation_notes && <p className="text-red-500 text-xs">{errors.isolation_notes.message}</p>}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700">Staff Initials <span className="text-red-500">*</span></label>
+            <input type="text" {...register('staff_initials')} className="w-full mt-1 border border-slate-300 rounded-lg p-2" required />
+            {errors.staff_initials && <p className="text-red-500 text-xs">{errors.staff_initials.message}</p>}
           </div>
           <button type="submit" disabled={isSubmitting} className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm font-medium flex items-center justify-center gap-2 disabled:bg-slate-400">
             {isSubmitting ? 'Saving...' : 'Save Record'}

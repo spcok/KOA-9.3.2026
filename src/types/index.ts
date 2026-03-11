@@ -113,7 +113,7 @@ export interface Animal {
   is_dob_unknown?: boolean;
   sex?: 'Male' | 'Female' | 'Unknown';
   microchip_id?: string;
-  disposition_status?: 'Active' | 'Transferred' | 'Deceased';
+  disposition_status?: 'Active' | 'Transferred' | 'Deceased' | 'Missing' | 'Stolen';
   origin_location?: string;
   destination_location?: string;
   transfer_date?: string;
@@ -137,7 +137,8 @@ export interface Animal {
   display_order?: number;
   archived?: boolean;
   archive_reason?: string;
-  archive_type?: 'Disposition' | 'Death';
+  archived_at?: string;
+  archive_type?: 'Disposition' | 'Death' | 'Euthanasia' | 'Missing' | 'Stolen';
   is_quarantine?: boolean;
   distribution_map_url?: string;
   water_tipping_temp?: number;
@@ -329,6 +330,7 @@ export interface MARChart {
   status: 'Active' | 'Completed';
   instructions: string;
   administered_dates: string[];
+  staff_initials: string;
 }
 
 export interface QuarantineRecord {
@@ -340,6 +342,7 @@ export interface QuarantineRecord {
   end_date: string;
   status: 'Active' | 'Cleared';
   isolation_notes: string;
+  staff_initials: string;
 }
 
 export interface InternalMovement {

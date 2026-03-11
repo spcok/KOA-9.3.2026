@@ -24,8 +24,10 @@ export interface PendingTask {
   due_date?: string;
 }
 
-export function useDashboardData(activeTab: AnimalCategory, viewDate: string) {
+export function useDashboardData(activeTab: AnimalCategory | 'ARCHIVED', viewDate: string) {
   const liveAnimalsRaw = useHybridQuery<Animal[]>('animals', () => db.animals.toArray(), []);
+  const archivedAnimalsRaw = useHybridQuery<Animal[]>('archived_animals', () => db.archived_animals.toArray(), []);
+  const archivedAnimals = useMemo(() => archivedAnimalsRaw || [], [archivedAnimalsRaw]);
   const logsRaw = useHybridQuery<LogEntry[]>('daily_logs', () => db.daily_logs.where('log_date').equals(viewDate).toArray(), [viewDate]);
   const allLogsRaw = useHybridQuery<LogEntry[]>('daily_logs', () => db.daily_logs.toArray(), []);
   
@@ -43,7 +45,7 @@ export function useDashboardData(activeTab: AnimalCategory, viewDate: string) {
 
   const animalStats = useMemo(() => {
     let filtered = liveAnimals || [];
-    if (activeTab && activeTab !== AnimalCategory.ALL) {
+    if (activeTab && activeTab !== AnimalCategory.ALL && activeTab !== 'ARCHIVED') {
       filtered = filtered.filter(a => a.category === activeTab);
     }
     
@@ -87,9 +89,9 @@ export function useDashboardData(activeTab: AnimalCategory, viewDate: string) {
   }, [tasks]);
 
   useEffect(() => {
-    let result = [...liveAnimals];
+    let result = activeTab === 'ARCHIVED' ? [...archivedAnimals] : [...liveAnimals];
     
-    if (activeTab && activeTab !== AnimalCategory.ALL) {
+    if (activeTab && activeTab !== AnimalCategory.ALL && activeTab !== 'ARCHIVED') {
       result = result.filter(a => a.category === activeTab);
     }
     
@@ -156,7 +158,7 @@ export function useDashboardData(activeTab: AnimalCategory, viewDate: string) {
     
     const timer = setTimeout(() => setFilteredAnimals(enhanced), 0);
     return () => clearTimeout(timer);
-  }, [liveAnimals, activeTab, searchTerm, sortOption, logs, allLogs, tasks]);
+  }, [liveAnimals, archivedAnimals, activeTab, searchTerm, sortOption, logs, allLogs, tasks]);
 
   const toggleOrderLock = (locked: boolean) => setIsOrderLocked(locked);
   const reorderAnimals = (newOrder: EnhancedAnimal[]) => setFilteredAnimals(newOrder);

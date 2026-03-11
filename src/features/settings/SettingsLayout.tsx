@@ -30,7 +30,21 @@ const tabs: { id: TabType; label: string; icon: React.ElementType; adminOnly?: b
 
 const SettingsLayout: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('org');
-  const { isAdmin, isOwner } = usePermissions();
+  const permissions = usePermissions();
+
+  const tabs: { id: TabType; label: string; icon: React.ElementType; permission?: keyof typeof permissions }[] = [
+    { id: 'access', label: 'Access Control', icon: ShieldCheck, permission: 'manage_roles' },
+    { id: 'directory', label: 'Directory', icon: Users, permission: 'manage_users' },
+    { id: 'zla', label: 'ZLA Documents', icon: FileText, permission: 'manage_zla_documents' },
+    { id: 'intelligence', label: 'Intelligence', icon: Brain, permission: 'view_settings' },
+    { id: 'migration', label: 'Migration', icon: Database, permission: 'view_settings' },
+    { id: 'lists', label: 'Operational Lists', icon: List, permission: 'view_settings' },
+    { id: 'org', label: 'Organisation Profile', icon: Building, permission: 'view_settings' },
+    { id: 'health', label: 'System Health', icon: HeartPulse, permission: 'view_settings' },
+    { id: 'bugs', label: 'Bug Reports', icon: Bug, permission: 'manage_incidents' },
+  ];
+
+  const visibleTabs = tabs.filter(tab => !tab.permission || permissions[tab.permission]);
 
   const renderContent = () => {
     switch (activeTab) {
@@ -46,8 +60,6 @@ const SettingsLayout: React.FC = () => {
       default: return <OrgProfile />;
     }
   };
-
-  const visibleTabs = tabs.filter(tab => !tab.adminOnly || (isAdmin || isOwner));
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">

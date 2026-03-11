@@ -2,16 +2,90 @@ import { useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, AppDatabase } from './db';
 import { supabase } from './supabase';
+import { Animal } from '../types';
 
 // ... (rest of the file)
 
 /**
+ * archiveAnimal
+ * Moves an animal to the archived_animals table.
+ */
+export async function archiveAnimal(animal: Animal, reason: string, type: NonNullable<Animal['archive_type']>) {
+  let newDispositionStatus = 'Transferred'; // default for Disposition
+  if (type === 'Death' || type === 'Euthanasia') newDispositionStatus = 'Deceased';
+  if (type === 'Missing') newDispositionStatus = 'Missing';
+  if (type === 'Stolen') newDispositionStatus = 'Stolen';
+
+  const archivedAnimal = { 
+    ...animal, 
+    archive_type: type,
+    archive_reason: reason, 
+    disposition_status: newDispositionStatus as NonNullable<Animal['disposition_status']>,
+    archived_at: new Date().toISOString() 
+  };
+  
+  // Dexie transaction
+  await db.transaction('rw', db.animals, db.archived_animals, async () => {
+    await db.archived_animals.add(archivedAnimal);
+    await db.animals.delete(animal.id);
+  });
+
+  // Supabase
+  if (navigator.onLine) {
+    try {
+      await supabase.from('archived_animals').upsert(archivedAnimal).throwOnError();
+      await supabase.from('animals').delete().eq('id', animal.id).throwOnError();
+    } catch (error) {
+      console.error('Failed to archive animal in Supabase', error);
+      await queueSync('archived_animals', animal.id, 'upsert', archivedAnimal);
+      await queueSync('animals', animal.id, 'delete', { id: animal.id });
+    }
+  } else {
+    await queueSync('archived_animals', animal.id, 'upsert', archivedAnimal);
+    await queueSync('animals', animal.id, 'delete', { id: animal.id });
+  }
+}
+
+/**
+ * restoreAnimal
+ * Moves an animal back to the animals table.
+ */
+export async function restoreAnimal(animal: Animal) {
+  // Dexie transaction
+  await db.transaction('rw', db.animals, db.archived_animals, async () => {
+    await db.animals.add(animal);
+    await db.archived_animals.delete(animal.id);
+  });
+
+  // Supabase
+  if (navigator.onLine) {
+    try {
+      await supabase.from('animals').upsert(animal).throwOnError();
+      await supabase.from('archived_animals').delete().eq('id', animal.id).throwOnError();
+    } catch (error) {
+      console.error('Failed to restore animal in Supabase', error);
+      await queueSync('animals', animal.id, 'upsert', animal);
+      await queueSync('archived_animals', animal.id, 'delete', { id: animal.id });
+    }
+  } else {
+    await queueSync('animals', animal.id, 'upsert', animal);
+    await queueSync('archived_animals', animal.id, 'delete', { id: animal.id });
+  }
+}
+
+async function queueSync(tableName: string, recordId: string, operation: 'upsert' | 'delete', payload: Record<string, unknown>) {
+  await db.sync_queue.add({
+    table_name: tableName,
+    record_id: recordId,
+    operation,
+    payload,
+    created_at: new Date().toISOString()
+  });
+}
+
+/**
  * useHybridQuery
  * Online-First with Reactive Offline Cache (Stale-While-Revalidate)
- * 
- * 1. Returns a reactive useLiveQuery from Dexie.
- * 2. Fires a background fetch to Supabase.
- * 3. Updates Dexie with fresh data, triggering a UI refresh.
  */
 export function useHybridQuery<T>(
   tableName: keyof AppDatabase,

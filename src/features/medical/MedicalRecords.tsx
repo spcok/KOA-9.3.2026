@@ -9,7 +9,7 @@ import { generateMarChartDocx } from './exportMarChart';
 import { ClinicalNote } from '../../types';
 
 const MedicalRecords: React.FC = () => {
-  const { view_medical, add_clinical_notes } = usePermissions();
+  const permissions = usePermissions();
   const { clinicalNotes, marCharts, quarantineRecords, animals, isLoading, addClinicalNote, updateClinicalNote, addMarChart, addQuarantineRecord, updateQuarantineRecord } = useMedicalData();
   const [activeTab, setActiveTab] = useState<'notes' | 'mar' | 'quarantine'>('notes');
   const [selectedPatient, setSelectedPatient] = useState<string>('All');
@@ -19,7 +19,7 @@ const MedicalRecords: React.FC = () => {
   const [isMarModalOpen, setIsMarModalOpen] = useState(false);
   const [isQuarantineModalOpen, setIsQuarantineModalOpen] = useState(false);
 
-  if (!view_medical) {
+  if (!permissions.view_medical) {
     return (
       <div className="p-8 flex flex-col items-center justify-center h-full min-h-[50vh] space-y-4">
         <div className="p-4 bg-rose-50 text-rose-600 rounded-2xl border border-rose-100 flex flex-col items-center gap-2 max-w-md text-center">
@@ -102,14 +102,14 @@ const MedicalRecords: React.FC = () => {
         <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
           Clinical Records
         </h1>
-        {add_clinical_notes && (
+        { (activeTab === 'notes' && permissions.add_clinical_notes) || (activeTab === 'mar' && permissions.prescribe_medications) || (activeTab === 'quarantine' && permissions.manage_quarantine) ? (
           <button 
             onClick={handleAdd}
             className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2"
           >
             <Plus size={16} /> Add {activeTab === 'notes' ? 'Note' : activeTab === 'mar' ? 'Medication' : 'Record'}
           </button>
-        )}
+        ) : null}
       </div>
       
       <AddClinicalNoteModal 

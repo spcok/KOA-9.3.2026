@@ -4,7 +4,7 @@ import AnimalProfile from '../animals/AnimalProfile';
 import { Animal, AnimalCategory } from '../../types';
 
 export default function DashboardContainer() {
-  const [activeTab, setActiveTab] = useState<AnimalCategory>(AnimalCategory.OWLS);
+  const [activeTab, setActiveTab] = useState<AnimalCategory | 'ARCHIVED'>(AnimalCategory.OWLS);
   const [viewDate, setViewDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [selectedAnimalId, setSelectedAnimalId] = useState<string | null>(null);
 

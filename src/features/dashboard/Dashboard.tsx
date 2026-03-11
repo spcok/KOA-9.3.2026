@@ -8,8 +8,8 @@ import { usePermissions } from '../../hooks/usePermissions';
 
 interface DashboardProps {
   onSelectAnimal: (animal: EnhancedAnimal) => void;
-  activeTab: AnimalCategory;
-  setActiveTab: (category: AnimalCategory) => void;
+  activeTab: AnimalCategory | 'ARCHIVED';
+  setActiveTab: (tab: AnimalCategory | 'ARCHIVED') => void;
   viewDate: string;
   setViewDate: (date: string) => void;
 }
@@ -17,7 +17,7 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ 
     onSelectAnimal, activeTab, setActiveTab, viewDate, setViewDate
 }) => {
-  const { view_animals, edit_animals } = usePermissions();
+  const permissions = usePermissions();
   const {
     filteredAnimals,
     animalStats,
@@ -37,7 +37,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     setExpandedGroups(prev => ({ ...prev, [groupName]: !prev[groupName] }));
   };
 
-  if (!view_animals) {
+  if (!permissions.view_animals) {
     return (
       <div className="p-8 flex flex-col items-center justify-center h-full min-h-[50vh] space-y-4">
         <div className="p-4 bg-rose-50 text-rose-600 rounded-2xl border border-rose-100 flex flex-col items-center gap-2 max-w-md text-center">
@@ -229,7 +229,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             <button onClick={() => toggleOrderLock(!isOrderLocked)} className={`shrink-0 p-2.5 border border-slate-200 rounded-lg ${isOrderLocked ? 'bg-slate-800 text-white' : 'bg-white text-slate-600'}`}>
               {isOrderLocked ? <Lock size={16} /> : <Unlock size={16} />}
             </button>
-          {edit_animals && (
+          {permissions.add_animals && (
             <button onClick={() => setIsCreateAnimalModalOpen(true)} className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs lg:text-sm font-medium hover:bg-blue-700 shadow-sm whitespace-nowrap w-full sm:w-auto">
               <Plus size={16} /> Add {activeTab.charAt(0) + activeTab.slice(1).toLowerCase()}
             </button>
@@ -250,6 +250,16 @@ const Dashboard: React.FC<DashboardProps> = ({
             {cat.charAt(0) + cat.slice(1).toLowerCase()}
           </button>
         ))}
+        {(permissions.isAdmin || permissions.isOwner) && (
+          <button
+            onClick={() => setActiveTab('ARCHIVED')}
+            className={`flex-1 min-w-[100px] py-2 px-4 text-xs lg:text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
+              activeTab === 'ARCHIVED' ? 'bg-amber-100 text-amber-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            Archived
+          </button>
+        )}
       </div>
 
       {/* List Header */}
@@ -266,11 +276,21 @@ const Dashboard: React.FC<DashboardProps> = ({
                 <th className="px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-[11px] md:text-xs whitespace-normal break-words min-w-[90px] max-w-[140px] md:max-w-[250px] leading-tight">Name</th>
                 <th className="px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-[11px] md:text-xs whitespace-nowrap hidden xl:table-cell">Species</th>
                 <th className="px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-[11px] md:text-xs whitespace-nowrap hidden 2xl:table-cell">Ring/Microchip</th>
-                <th className={`px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-[11px] md:text-xs whitespace-nowrap ${activeTab === AnimalCategory.EXOTICS ? 'hidden' : ''}`}>Today's Weight</th>
-                <th className="px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-[11px] md:text-xs whitespace-nowrap">Today's Feed</th>
-                <th className={`px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-[11px] md:text-xs whitespace-normal leading-tight ${activeTab === AnimalCategory.EXOTICS ? 'hidden' : (activeTab === AnimalCategory.OWLS || activeTab === AnimalCategory.RAPTORS ? '' : 'hidden md:table-cell')}`}>Last Fed</th>
-                <th className={`px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-[11px] md:text-xs whitespace-nowrap ${activeTab === AnimalCategory.EXOTICS ? '' : 'hidden'}`}>Next Feed</th>
-                <th className="px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-[11px] md:text-xs whitespace-nowrap hidden md:table-cell">Location</th>
+                {activeTab === 'ARCHIVED' ? (
+                    <>
+                        <th className="px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-[11px] md:text-xs whitespace-nowrap">Status</th>
+                        <th className="px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-[11px] md:text-xs whitespace-nowrap">Date Archived</th>
+                        <th className="px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-[11px] md:text-xs whitespace-nowrap">Reason</th>
+                    </>
+                ) : (
+                    <>
+                        <th className={`px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-[11px] md:text-xs whitespace-nowrap ${activeTab === AnimalCategory.EXOTICS ? 'hidden' : ''}`}>Today's Weight</th>
+                        <th className="px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-[11px] md:text-xs whitespace-nowrap">Today's Feed</th>
+                        <th className={`px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-[11px] md:text-xs whitespace-normal leading-tight ${activeTab === AnimalCategory.EXOTICS ? 'hidden' : (activeTab === AnimalCategory.OWLS || activeTab === AnimalCategory.RAPTORS ? '' : 'hidden md:table-cell')}`}>Last Fed</th>
+                        <th className={`px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-[11px] md:text-xs whitespace-nowrap ${activeTab === AnimalCategory.EXOTICS ? '' : 'hidden'}`}>Next Feed</th>
+                        <th className="px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-[11px] md:text-xs whitespace-nowrap hidden md:table-cell">Location</th>
+                    </>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -297,28 +317,38 @@ const Dashboard: React.FC<DashboardProps> = ({
                     </td>
                     <td className="px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-xs md:text-sm text-slate-500 whitespace-nowrap hidden xl:table-cell">{animal.species}</td>
                     <td className="px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-xs md:text-sm text-slate-400 whitespace-nowrap hidden 2xl:table-cell">{animal.displayId}</td>
-                    <td className={`px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-xs md:text-sm text-slate-400 whitespace-nowrap ${activeTab === AnimalCategory.EXOTICS ? 'hidden' : ''}`}>
-                      {animal.todayWeight ? getWeightDisplay(animal.todayWeight, animal.weight_unit) : '-'}
-                    </td>
-                    <td className="px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-xs md:text-sm text-slate-400 whitespace-nowrap">
-                      {animal.todayFeed ? (typeof animal.todayFeed.value === 'string' ? animal.todayFeed.value : String(animal.todayFeed.value || 'Fed')) : '-'}
-                    </td>
-                    <td className={`px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-xs md:text-sm text-slate-400 whitespace-normal leading-tight min-w-[60px] ${activeTab === AnimalCategory.EXOTICS ? 'hidden' : (activeTab === AnimalCategory.OWLS || activeTab === AnimalCategory.RAPTORS ? '' : 'hidden md:table-cell')}`}>{animal.lastFedStr}</td>
-                    <td className={`px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-xs md:text-sm text-slate-500 whitespace-normal min-w-[90px] ${activeTab === AnimalCategory.EXOTICS ? '' : 'hidden'}`}>
-                      {animal.nextFeedTask ? (
-                        <div className="flex flex-col gap-0.5">
-                          <span className="font-bold text-slate-800 text-xs uppercase tracking-tight">
-                            {new Date(animal.nextFeedTask.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-                          </span>
-                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 leading-tight">
-                            {animal.nextFeedTask.notes || 'Scheduled'}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-slate-300">-</span>
-                      )}
-                    </td>
-                    <td className="px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-xs md:text-sm text-blue-500 whitespace-nowrap hidden md:table-cell">{animal.location}</td>
+                    {activeTab === 'ARCHIVED' ? (
+                        <>
+                            <td className="px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-xs md:text-sm text-slate-600 whitespace-nowrap">{animal.disposition_status}</td>
+                            <td className="px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-xs md:text-sm text-slate-600 whitespace-nowrap">{animal.archived_at ? new Date(animal.archived_at).toLocaleDateString('en-GB') : '-'}</td>
+                            <td className="px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-xs md:text-sm text-slate-600 whitespace-normal">{animal.archive_reason}</td>
+                        </>
+                    ) : (
+                        <>
+                            <td className={`px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-xs md:text-sm text-slate-400 whitespace-nowrap ${activeTab === AnimalCategory.EXOTICS ? 'hidden' : ''}`}>
+                            {animal.todayWeight ? getWeightDisplay(animal.todayWeight, animal.weight_unit) : '-'}
+                            </td>
+                            <td className="px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-xs md:text-sm text-slate-400 whitespace-nowrap">
+                            {animal.todayFeed ? (typeof animal.todayFeed.value === 'string' ? animal.todayFeed.value : String(animal.todayFeed.value || 'Fed')) : '-'}
+                            </td>
+                            <td className={`px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-xs md:text-sm text-slate-400 whitespace-normal leading-tight min-w-[60px] ${activeTab === AnimalCategory.EXOTICS ? 'hidden' : (activeTab === AnimalCategory.OWLS || activeTab === AnimalCategory.RAPTORS ? '' : 'hidden md:table-cell')}`}>{animal.lastFedStr}</td>
+                            <td className={`px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-xs md:text-sm text-slate-500 whitespace-normal min-w-[90px] ${activeTab === AnimalCategory.EXOTICS ? '' : 'hidden'}`}>
+                            {animal.nextFeedTask ? (
+                                <div className="flex flex-col gap-0.5">
+                                <span className="font-bold text-slate-800 text-xs uppercase tracking-tight">
+                                    {new Date(animal.nextFeedTask.due_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                                </span>
+                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 leading-tight">
+                                    {animal.nextFeedTask.notes || 'Scheduled'}
+                                </span>
+                                </div>
+                            ) : (
+                                <span className="text-slate-300">-</span>
+                            )}
+                            </td>
+                            <td className="px-1 py-2 md:px-2 md:py-3 lg:px-4 lg:py-4 text-xs md:text-sm text-blue-500 whitespace-nowrap hidden md:table-cell">{animal.location}</td>
+                        </>
+                    )}
                   </tr>
                 );
 

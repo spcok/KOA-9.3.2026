@@ -17,7 +17,7 @@ import { renderAsync } from 'docx-preview';
 import { db } from '../../lib/db';
 import { useHybridQuery } from '../../lib/dataEngine';
 import { Animal } from '../../types';
-import { generateDailyLogDocx, generateInternalMovementsDocx, generateExternalTransfersDocx, generateSiteMaintenanceDocx, generateAnimalCensusDocx, generateSection9Docx } from './utils/docxExportService';
+import { generateDailyLogDocx, generateInternalMovementsDocx, generateExternalTransfersDocx, generateSiteMaintenanceDocx, generateAnimalCensusDocx, generateSection9Docx, generateDeathCertificateDocx } from './utils/docxExportService';
 import { useAuthStore } from '../../store/authStore';
 
 interface ReportDefinition {
@@ -105,6 +105,14 @@ const REPORTS: ReportDefinition[] = [
     icon: Scale,
     exportFn: async () => { return true; },
     columns: ['Date', 'Animal', 'Weight', 'Change', 'Staff']
+  },
+  {
+    id: 'death_certificate',
+    title: 'Death Certificate',
+    description: 'Generate a formal death certificate for a deceased animal.',
+    icon: FileText,
+    exportFn: async () => { return true; },
+    columns: ['Name', 'Species', 'Date of Death']
   }
 ];
 
@@ -116,6 +124,7 @@ export default function ReportsDashboard() {
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('landscape');
   
   const animals = useHybridQuery<Animal[]>('animals', () => db.animals.toArray(), []);
+  const archivedAnimals = useHybridQuery<Animal[]>('archived_animals', () => db.archived_animals.toArray(), []);
   const { currentUser } = useAuthStore();
 
   const uniqueSections = Array.from(
@@ -339,7 +348,10 @@ export default function ReportsDashboard() {
         // Add one day to end date to include the whole day
         const endInclusive = end + 24 * 60 * 60 * 1000 - 1;
 
-        (animals || []).forEach(animal => {
+        // Combine both arrays to ensure historical accuracy
+        const allAnimals = [...(animals || []), ...(archivedAnimals || [])];
+
+        allAnimals.forEach(animal => {
           if (selectedSection && animalSectionMap.get(animal.id) !== selectedSection) return;
 
           const species = animal.species || 'Unknown Species';
@@ -397,6 +409,28 @@ export default function ReportsDashboard() {
             generatedBy: currentUser?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'STAFF'
           },
           orientation
+        );
+        setPreviewBlob(blob);
+        
+        if (previewContainerRef.current) {
+          await renderAsync(blob, previewContainerRef.current, undefined, {
+            className: 'docx-preview-page',
+            inWrapper: true,
+          });
+        }
+        return;
+      } else if (activeReportId === 'death_certificate') {
+        const animal = (archivedAnimals || []).find(a => a.id === selectedSection);
+        if (!animal) throw new Error('Animal not found');
+        
+        const blob = await generateDeathCertificateDocx(
+          animal,
+          {
+            reportName: dynamicTitle,
+            startDate: '',
+            endDate: '',
+            generatedBy: currentUser?.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'STAFF'
+          }
         );
         setPreviewBlob(blob);
         
@@ -481,25 +515,29 @@ export default function ReportsDashboard() {
 
         <div className="bg-white border-b border-slate-200 px-8 py-4 print:hidden">
           <div className="flex flex-wrap items-end gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Start Date</label>
-              <input 
-                type="date" 
-                value={startDate} 
-                onChange={(e) => setStartDate(e.target.value)}
-                className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">End Date</label>
-              <input 
-                type="date" 
-                value={endDate} 
-                onChange={(e) => setEndDate(e.target.value)}
-                className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
+            {activeReport?.id !== 'site_maintenance' && activeReport?.id !== 'death_certificate' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Start Date</label>
+                  <input 
+                    type="date" 
+                    value={startDate} 
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">End Date</label>
+                  <input 
+                    type="date" 
+                    value={endDate} 
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Orientation</label>
@@ -513,7 +551,7 @@ export default function ReportsDashboard() {
               </select>
             </div>
 
-            {activeReport?.id !== 'site_maintenance' && uniqueSections.length > 0 && (
+            {activeReport?.id !== 'site_maintenance' && activeReport?.id !== 'death_certificate' && uniqueSections.length > 0 && (
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Animal Section</label>
                 <select
@@ -524,6 +562,22 @@ export default function ReportsDashboard() {
                   <option value="">All Sections</option>
                   {uniqueSections.map(section => (
                     <option key={section as string} value={section as string}>{section as string}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {activeReport?.id === 'death_certificate' && (
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Select Animal</label>
+                <select
+                  value={selectedSection}
+                  onChange={(e) => setSelectedSection(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-md px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Select an animal...</option>
+                  {(archivedAnimals || []).filter(a => a.archive_reason === 'Death').map(animal => (
+                    <option key={animal.id} value={animal.id}>{animal.name} ({animal.species})</option>
                   ))}
                 </select>
               </div>

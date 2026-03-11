@@ -13,6 +13,7 @@ const schema = z.object({
   start_date: z.string().min(1, 'Start date is required'),
   end_date: z.string().optional(),
   instructions: z.string().min(1, 'Instructions are required'),
+  staff_initials: z.string().min(2, 'Initials are required'),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -75,6 +76,11 @@ export const AddMarChartModal: React.FC<Props> = ({ isOpen, onClose, onSave, ani
             <label className="block text-sm font-medium text-slate-700">Instructions</label>
             <input type="text" {...register('instructions')} className="w-full mt-1 border border-slate-300 rounded-lg p-2" />
             {errors.instructions && <p className="text-red-500 text-xs">{errors.instructions.message}</p>}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700">Staff Initials <span className="text-red-500">*</span></label>
+            <input type="text" {...register('staff_initials')} className="w-full mt-1 border border-slate-300 rounded-lg p-2" required />
+            {errors.staff_initials && <p className="text-red-500 text-xs">{errors.staff_initials.message}</p>}
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700">Start Date</label>

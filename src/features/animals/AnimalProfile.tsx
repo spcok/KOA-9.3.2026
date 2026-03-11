@@ -1,11 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { LogType, HazardRating } from '../../types';
+import { Animal, LogType, HazardRating } from '../../types';
 import { 
   ChevronLeft, Scale, Utensils, Printer, Edit, 
   AlertTriangle, Plus, Archive, Skull, 
-  Truck, Loader2, Info, Calendar, MapPin, ShieldCheck,
+  Loader2, Info, Calendar, MapPin, ShieldCheck,
   History, Heart, Layers, Thermometer, Droplets,
-  CheckCircle2, Clock, User, Fingerprint, ClipboardCheck, FileText
+  CheckCircle2, Clock, User, Fingerprint, ClipboardCheck, FileText, RotateCcw
 } from 'lucide-react';
 import { formatWeightDisplay } from '../../services/weightUtils';
 import AddEntryModal from './AddEntryModal';
@@ -16,6 +16,7 @@ import { IUCNBadge } from './IUCNBadge';
 import { useAnimalProfileData } from './useAnimalProfileData';
 import { DEFAULT_FOOD_OPTIONS, DEFAULT_FEED_METHODS, DEFAULT_EVENT_TYPES } from '../../constants';
 import { generateBirthCertificateDocx } from '../reports/utils/docxExportService';
+import { restoreAnimal } from '../../lib/dataEngine';
 
 interface AnimalProfileProps {
   animalId: string;
@@ -23,7 +24,7 @@ interface AnimalProfileProps {
 }
 
 const AnimalProfile: React.FC<AnimalProfileProps> = ({ animalId, onBack }) => {
-  const { canEditAnimals, canEditMedical } = usePermissions();
+  const permissions = usePermissions();
   
   const {
     animal,
@@ -35,6 +36,18 @@ const AnimalProfile: React.FC<AnimalProfileProps> = ({ animalId, onBack }) => {
     archiveAnimal
   } = useAnimalProfileData(animalId);
 
+  const isArchived = animal?.archived;
+
+  const handleRestore = async () => {
+    if (!animal) return;
+    try {
+      await restoreAnimal(animal);
+      onBack();
+    } catch (err) {
+      console.error("Failed to restore animal:", err);
+    }
+  };
+
   const [activeTab, setActiveTab] = useState<'Overview' | 'History' | 'Medical' | 'Tasks'>('Overview');
   const [logFilter, setLogFilter] = useState<LogType | 'ALL'>('ALL');
   
@@ -42,7 +55,7 @@ const AnimalProfile: React.FC<AnimalProfileProps> = ({ animalId, onBack }) => {
   const [isAddEntryOpen, setIsAddEntryOpen] = useState(false);
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
-  const [archiveForm, setArchiveForm] = useState<{ reason: string, type: 'Disposition' | 'Death' }>({
+  const [archiveForm, setArchiveForm] = useState<{ reason: string, type: 'Disposition' | 'Death' | 'Euthanasia' | 'Missing' | 'Stolen' }>({
     reason: '',
     type: 'Disposition'
   });
@@ -123,6 +136,12 @@ const AnimalProfile: React.FC<AnimalProfileProps> = ({ animalId, onBack }) => {
 
   return (
     <div className="min-h-screen bg-slate-50/50 pb-24 font-sans">
+        {isArchived && (
+            <div className="bg-amber-500 text-white px-6 py-3 text-center font-bold flex items-center justify-center gap-2">
+                <AlertTriangle size={20} />
+                ⚠️ ARCHIVED RECORD - Reason: {animal?.archive_reason}
+            </div>
+        )}
         {/* STICKY FROSTED HEADER */}
         <div className="sticky top-0 z-30 bg-white/70 backdrop-blur-xl border-b border-slate-200/60 px-6 py-4">
             <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
@@ -138,7 +157,7 @@ const AnimalProfile: React.FC<AnimalProfileProps> = ({ animalId, onBack }) => {
                             <div className="flex items-center gap-2">
                                 <h1 className="text-3xl font-bold text-slate-900">{String(animal.name)}</h1>
                                 {isHighHazard && <span className="text-rose-600 animate-pulse"><Skull size={16}/></span>}
-                                {animal.archived && <span className="bg-slate-900 text-white text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-widest">Archived</span>}
+                                {isArchived && <span className="bg-slate-900 text-white text-[8px] font-black px-2 py-0.5 rounded uppercase tracking-widest">Archived</span>}
                             </div>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{String(animal.species)}</p>
                         </div>
@@ -146,30 +165,39 @@ const AnimalProfile: React.FC<AnimalProfileProps> = ({ animalId, onBack }) => {
                 </div>
 
                 <div className="flex items-center gap-2 w-full md:w-auto">
-                    {animal.acquisition_type === 'BORN' && (
-                        <button onClick={handleGenerateBirthCertificate} className="px-4 py-2 bg-white text-slate-700 border border-slate-300 rounded-md hover:bg-slate-50 text-sm font-medium transition-colors" title="Birth Certificate">
-                            <FileText size={18} />
+                    {!isArchived && (
+                        <>
+                            {animal.acquisition_type === 'BORN' && (
+                                <button onClick={handleGenerateBirthCertificate} className="px-4 py-2 bg-white text-slate-700 border border-slate-300 rounded-md hover:bg-slate-50 text-sm font-medium transition-colors" title="Birth Certificate">
+                                    <FileText size={18} />
+                                </button>
+                            )}
+                            <button onClick={() => setIsSignGeneratorOpen(true)} className="px-4 py-2 bg-white text-slate-700 border border-slate-300 rounded-md hover:bg-slate-50 text-sm font-medium transition-colors" title="Signage">
+                                <Printer size={18} />
+                            </button>
+                            {permissions.edit_animals && (
+                                <button onClick={() => setIsEditProfileOpen(true)} className="px-4 py-2 bg-white text-slate-700 border border-slate-300 rounded-md hover:bg-slate-50 text-sm font-medium transition-colors" title="Edit Profile">
+                                    <Edit size={18} />
+                                </button>
+                            )}
+                            {permissions.archive_animals && (
+                                <button onClick={() => setIsArchiveModalOpen(true)} className="px-4 py-2 bg-white text-slate-700 border border-slate-300 rounded-md hover:bg-slate-50 text-sm font-medium transition-colors" title="Archive">
+                                    <Archive size={18} />
+                                </button>
+                            )}
+                            <button 
+                                onClick={() => { setEntryType(LogType.GENERAL); setIsAddEntryOpen(true); }}
+                                className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2"
+                            >
+                                <Plus size={16} /> Log Activity
+                            </button>
+                        </>
+                    )}
+                    {isArchived && (
+                        <button onClick={handleRestore} className="bg-emerald-600 text-white px-4 py-2 rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium flex items-center gap-2">
+                            <RotateCcw size={16} /> Restore to Live Collection
                         </button>
                     )}
-                    <button onClick={() => setIsSignGeneratorOpen(true)} className="px-4 py-2 bg-white text-slate-700 border border-slate-300 rounded-md hover:bg-slate-50 text-sm font-medium transition-colors" title="Signage">
-                        <Printer size={18} />
-                    </button>
-                    {canEditAnimals && (
-                        <button onClick={() => setIsEditProfileOpen(true)} className="px-4 py-2 bg-white text-slate-700 border border-slate-300 rounded-md hover:bg-slate-50 text-sm font-medium transition-colors" title="Edit Profile">
-                            <Edit size={18} />
-                        </button>
-                    )}
-                    {canEditAnimals && (
-                        <button onClick={() => setIsArchiveModalOpen(true)} className="px-4 py-2 bg-white text-slate-700 border border-slate-300 rounded-md hover:bg-slate-50 text-sm font-medium transition-colors" title="Archive">
-                            <Archive size={18} />
-                        </button>
-                    )}
-                    <button 
-                        onClick={() => { setEntryType(LogType.GENERAL); setIsAddEntryOpen(true); }}
-                        className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm font-medium flex items-center gap-2"
-                    >
-                        <Plus size={16} /> Log Activity
-                    </button>
                 </div>
             </div>
         </div>
@@ -582,22 +610,17 @@ const AnimalProfile: React.FC<AnimalProfileProps> = ({ animalId, onBack }) => {
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-xs font-medium text-slate-700 mb-2">Archive Type</label>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <button 
-                                        onClick={() => setArchiveForm(prev => ({ ...prev, type: 'Disposition' }))}
-                                        className={`flex flex-col items-center justify-center gap-2 py-4 rounded-lg border transition-all ${archiveForm.type === 'Disposition' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}
-                                    >
-                                        <Truck size={20} />
-                                        <span className="text-xs font-semibold">Disposition</span>
-                                    </button>
-                                    <button 
-                                        onClick={() => setArchiveForm(prev => ({ ...prev, type: 'Death' }))}
-                                        className={`flex flex-col items-center justify-center gap-2 py-4 rounded-lg border transition-all ${archiveForm.type === 'Death' ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}
-                                    >
-                                        <Skull size={20} />
-                                        <span className="text-xs font-semibold">Death</span>
-                                    </button>
-                                </div>
+                                <select 
+                                    value={archiveForm.type}
+                                    onChange={(e) => setArchiveForm(prev => ({ ...prev, type: e.target.value as NonNullable<Animal['archive_type']> }))}
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm focus:border-blue-500 transition-all outline-none"
+                                >
+                                    <option value="Disposition">Disposition</option>
+                                    <option value="Death">Death</option>
+                                    <option value="Euthanasia">Euthanasia</option>
+                                    <option value="Missing">Missing</option>
+                                    <option value="Stolen">Stolen</option>
+                                </select>
                             </div>
 
                             <div>

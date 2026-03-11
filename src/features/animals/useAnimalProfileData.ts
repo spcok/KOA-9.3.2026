@@ -1,5 +1,5 @@
 import { db } from '../../lib/db';
-import { useHybridQuery, mutateOnlineFirst } from '../../lib/dataEngine';
+import { useHybridQuery, archiveAnimal as archiveAnimalDataEngine } from '../../lib/dataEngine';
 import { supabase } from '../../lib/supabase';
 import { Animal, LogEntry, Task } from '../../types';
 
@@ -27,10 +27,9 @@ export function useAnimalProfileData(animalId: string) {
   
   const isLoading = animal === undefined || logs === undefined || tasks === undefined;
 
-  const archiveAnimal = async (reason: string, type: 'Disposition' | 'Death') => {
+  const archiveAnimal = async (reason: string, type: NonNullable<Animal['archive_type']>) => {
     if (animal) {
-      const updatedAnimal = { ...animal, archived: true, archive_reason: reason, archive_type: type };
-      await mutateOnlineFirst('animals', updatedAnimal, 'upsert');
+      await archiveAnimalDataEngine(animal, reason, type);
     }
   };
 

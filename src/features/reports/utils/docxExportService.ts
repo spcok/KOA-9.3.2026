@@ -204,6 +204,48 @@ export const generateBirthCertificateDocx = async (
 
   return await Packer.toBlob(doc);
 };
+
+export const generateDeathCertificateDocx = async (
+  animal: Animal,
+  config?: ReportConfig
+): Promise<Blob> => {
+  const headerTable = await createDocumentHeader(config);
+
+  const doc = new Document({
+    sections: [{
+      properties: {
+        page: {
+          size: {
+            orientation: PageOrientation.PORTRAIT,
+          },
+          margin: { top: 720, right: 720, bottom: 720, left: 720 },
+        },
+      },
+      children: [
+        headerTable,
+        new Paragraph({ text: "", spacing: { after: 800 } }),
+        new Paragraph({
+          children: [new TextRun({ text: "CERTIFICATE OF DEATH", bold: true, size: 48 })],
+          alignment: AlignmentType.CENTER,
+          spacing: { after: 800 }
+        }),
+        new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            rows: [
+                new TableRow({ children: [new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Name", bold: true })] })] }), new TableCell({ children: [new Paragraph(animal.name)] })] }),
+                new TableRow({ children: [new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Species", bold: true })] })] }), new TableCell({ children: [new Paragraph(animal.species)] })] }),
+                new TableRow({ children: [new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Sex", bold: true })] })] }), new TableCell({ children: [new Paragraph(animal.sex || '--')] })] }),
+                new TableRow({ children: [new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Microchip/Ring Number", bold: true })] })] }), new TableCell({ children: [new Paragraph(animal.microchip_id || animal.ring_number || '--')] })] }),
+                new TableRow({ children: [new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Acquisition Date", bold: true })] })] }), new TableCell({ children: [new Paragraph(animal.acquisition_date ? new Date(animal.acquisition_date).toLocaleDateString() : '--')] })] }),
+                new TableRow({ children: [new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: "Date of Death", bold: true })] })] }), new TableCell({ children: [new Paragraph(animal.archived_at ? new Date(animal.archived_at).toLocaleDateString() : '--')] })] }),
+            ]
+        })
+      ],
+    }],
+  });
+
+  return await Packer.toBlob(doc);
+};
 export const generateInternalMovementsDocx = async (
   movements: InternalMovement[],
   animals: Animal[],
