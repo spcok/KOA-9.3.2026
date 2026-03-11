@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import imageCompression from 'browser-image-compression';
 
 /**
  * KOA Storage Engine
@@ -25,13 +26,20 @@ export async function uploadFile(file: File, folder: string): Promise<string> {
     throw new Error('File size exceeds the 5MB limit.');
   }
 
-  const fileExt = file.name.split('.').pop();
+  const options = {
+    maxSizeMB: 0.5,
+    maxWidthOrHeight: 1920,
+    useWebWorker: true
+  };
+  const fileToUpload = file.type.startsWith('image/') ? await imageCompression(file, options) : file;
+
+  const fileExt = fileToUpload.name.split('.').pop();
   const fileName = `${crypto.randomUUID()}.${fileExt}`;
   const filePath = `${folder}/${fileName}`;
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET_NAME)
-    .upload(filePath, file);
+    .upload(filePath, fileToUpload);
 
   if (uploadError) {
     console.log('Full uploadError object:', uploadError);

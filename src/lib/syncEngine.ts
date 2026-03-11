@@ -73,11 +73,18 @@ export async function forceHydrateFromCloud() {
 export async function processSyncQueue() {
   const queue = await db.sync_queue.toArray();
   
+  // Verify session before syncing
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) {
+    console.warn('Sync aborted: User is not authenticated. RLS will reject the payload.');
+    return;
+  }
+  
   for (const item of queue) {
     try {
       const payload = item.payload as Record<string, unknown>;
       if (item.operation === 'upsert') {
-        await supabase.from(item.table_name).upsert(payload).throwOnError();
+        await supabase.from(item.table_name).upsert(payload, { onConflict: 'id' }).throwOnError();
       } else if (item.operation === 'delete') {
         await supabase.from(item.table_name).delete().eq('id', payload.id as string).throwOnError();
       }

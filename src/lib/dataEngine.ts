@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { v4 as uuidv4 } from 'uuid';
 import { db, AppDatabase } from './db';
 import { supabase } from './supabase';
 
@@ -102,7 +101,7 @@ export async function mutateOnlineFirst<T extends { id?: string | number }>(
   payload: T, 
   operation: 'upsert' | 'delete' = 'upsert'
 ) {
-  if (!payload.id) payload.id = uuidv4();
+  if (!payload.id) payload.id = crypto.randomUUID();
   const table = db[tableName] as import('dexie').Table<unknown, string>;
 
   const pendingCount = await db.sync_queue.count();

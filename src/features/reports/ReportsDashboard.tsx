@@ -153,7 +153,7 @@ export default function ReportsDashboard() {
 
         const rawLogs = await db.daily_logs
           .where('log_date')
-          .between(startDate, endDate, true, true)
+          .between(startDate, new Date(new Date(endDate).setHours(23, 59, 59, 999)).toISOString(), true, true)
           .toArray();
 
         const logs = rawLogs.filter(log => {
@@ -187,7 +187,7 @@ export default function ReportsDashboard() {
       } else if (activeReportId === 'internal_movements') {
         const rawData = await db.internal_movements
           .where('log_date')
-          .between(startDate, endDate, true, true)
+          .between(startDate, new Date(new Date(endDate).setHours(23, 59, 59, 999)).toISOString(), true, true)
           .toArray();
           
         const filteredMovements = rawData.filter(m => {
